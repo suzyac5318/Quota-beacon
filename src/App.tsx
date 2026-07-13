@@ -153,6 +153,15 @@ export default function App() {
       onFocusLost: () => {
         hoveredRef.current = false;
         setHovered(false);
+        if (paletteActive.current) {
+          if (paletteClosing.current) return;
+          paletteClosing.current = true;
+          void closePalettePreview().catch(() => {
+            paletteClosing.current = false;
+            setOperationError("Unable to close color preview.");
+          });
+          return;
+        }
         scheduleCollapse(false);
       },
     }).then((value) => {

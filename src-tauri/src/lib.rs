@@ -570,20 +570,18 @@ pub fn run() {
             if window.label() == "widget" && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
                 let _ = position_palette_windows(window.app_handle());
             }
-            if window.label() == "widget" && matches!(event, WindowEvent::Focused(false)) {
+            if ["widget", "palette", "palette-editor"].contains(&window.label())
+                && matches!(event, WindowEvent::Focused(false))
+            {
                 let app = window.app_handle().clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(Duration::from_millis(50)).await;
-                    let controls_visible = ["palette", "palette-editor"].iter().any(|label| {
+                    let app_focused = ["widget", "palette", "palette-editor"].iter().any(|label| {
                         app.get_webview_window(label)
-                            .and_then(|window| window.is_visible().ok())
+                            .and_then(|window| window.is_focused().ok())
                             .unwrap_or(false)
                     });
-                    let widget_focused = app
-                        .get_webview_window("widget")
-                        .and_then(|window| window.is_focused().ok())
-                        .unwrap_or(false);
-                    if !controls_visible && !widget_focused {
+                    if !app_focused {
                         let _ = app.emit_to("widget", "widget-focus-lost", ());
                     }
                 });
