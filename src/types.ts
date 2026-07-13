@@ -31,6 +31,11 @@ export interface TokenUsageSummary {
   updatedAt: string;
 }
 
+export interface ConversationTokenUsage {
+  conversationId: string | null;
+  totalTokens: number | null;
+}
+
 export type TokenUsageStatus = "loading" | "ready" | "unavailable";
 
 export interface WidgetPreferences {

@@ -10,44 +10,21 @@ mod windows_impl {
         time::Duration,
     };
 
-    use tauri::{
-        AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl,
-        WebviewWindowBuilder,
-    };
+    use tauri::{AppHandle, Emitter};
     use windows_sys::Win32::{
-        Foundation::{CloseHandle, HWND, LPARAM, RECT},
+        Foundation::{CloseHandle, HWND, LPARAM},
         System::Threading::{
             OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION,
         },
         UI::WindowsAndMessaging::{
-            EnumWindows, GetForegroundWindow, GetWindowRect, GetWindowThreadProcessId, IsIconic,
-            IsWindowVisible,
+            EnumWindows, GetForegroundWindow, GetWindowThreadProcessId, IsWindowVisible,
         },
     };
 
-    use crate::{models::ConversationTokenUsage, token_usage};
+    use crate::token_usage;
 
-    const OVERLAY_WIDTH: f64 = 96.0;
-    const OVERLAY_HEIGHT: f64 = 32.0;
-    const RIGHT_INSET: f64 = 16.0;
-    const TOP_INSET: f64 = 78.0;
-    const MIN_CODEX_WIDTH: f64 = 560.0;
     const POLL_INTERVAL: Duration = Duration::from_millis(80);
     const TOKEN_REFRESH_TICKS: u8 = 6;
-
-    #[derive(Clone, Copy)]
-    struct CodexWindow {
-        hwnd: isize,
-        rect: RECT,
-        minimized: bool,
-    }
-
-    #[derive(Default)]
-    struct OverlayPlacement {
-        offset_x: i32,
-        offset_y: i32,
-        last_applied: Option<(i32, i32)>,
-    }
 
     #[derive(Default)]
     struct LogTail {
@@ -55,24 +32,16 @@ mod windows_impl {
         offset: u64,
     }
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct ActivityEvent {
         renderer_window_id: String,
         conversation_id: String,
     }
 
     unsafe extern "system" fn enum_window(hwnd: HWND, lparam: LPARAM) -> i32 {
-        if IsWindowVisible(hwnd) == 0 || !is_codex_window(hwnd) {
-            return 1;
-        }
-        let mut rect = RECT::default();
-        if GetWindowRect(hwnd, &mut rect) != 0 && rect.right > rect.left && rect.bottom > rect.top {
-            let windows = &mut *(lparam as *mut Vec<CodexWindow>);
-            windows.push(CodexWindow {
-                hwnd: hwnd as isize,
-                rect,
-                minimized: IsIconic(hwnd) != 0,
-            });
+        if IsWindowVisible(hwnd) != 0 && is_codex_window(hwnd) {
+            let windows = &mut *(lparam as *mut Vec<isize>);
+            windows.push(hwnd as isize);
         }
         1
     }
@@ -98,13 +67,10 @@ mod windows_impl {
         path.ends_with("\\chatgpt.exe") && path.contains("\\openai.codex_")
     }
 
-    fn enumerate_codex_windows() -> Vec<CodexWindow> {
+    fn enumerate_codex_windows() -> Vec<isize> {
         let mut windows = Vec::new();
         unsafe {
-            EnumWindows(
-                Some(enum_window),
-                &mut windows as *mut Vec<CodexWindow> as LPARAM,
-            );
+            EnumWindows(Some(enum_window), &mut windows as *mut Vec<isize> as LPARAM);
         }
         windows
     }
@@ -158,12 +124,13 @@ mod windows_impl {
         }
         let explicitly_active = line.contains("thread_stream_view_activity_changed active=true");
         let conversation_created = line.contains("Conversation created");
-        if !explicitly_active && !conversation_created {
+        let thread_activity = line.contains("threadId=");
+        if !explicitly_active && !conversation_created && !thread_activity {
             return None;
         }
         Some(ActivityEvent {
             renderer_window_id: field(line, "rendererWindowId=")?,
-            conversation_id: field(line, "conversationId=")?,
+            conversation_id: field(line, "conversationId=").or_else(|| field(line, "threadId="))?,
         })
     }
 
@@ -179,7 +146,7 @@ mod windows_impl {
             if initial_read {
                 self.path = Some(path.clone());
                 self.offset = fs::metadata(&path)
-                    .map(|metadata| metadata.len().saturating_sub(512 * 1024))
+                    .map(|metadata| metadata.len().saturating_sub(8 * 1024 * 1024))
                     .unwrap_or(0);
             }
             let Ok(mut file) = File::open(path) else {
@@ -212,151 +179,54 @@ mod windows_impl {
         }
     }
 
-    fn overlay_label(hwnd: isize) -> String {
-        format!("token-overlay-{:x}", hwnd as usize)
-    }
-
-    fn ensure_overlay(app: &AppHandle, target: CodexWindow) {
-        let label = overlay_label(target.hwnd);
-        if app.get_webview_window(&label).is_some() {
-            return;
-        }
-        let url = WebviewUrl::App(format!("index.html?token-overlay={}", target.hwnd).into());
-        let builder = WebviewWindowBuilder::new(app, &label, url)
-            .title("Codex Token Usage")
-            .inner_size(OVERLAY_WIDTH, OVERLAY_HEIGHT)
-            .resizable(false)
-            .decorations(false)
-            .transparent(true)
-            .shadow(false)
-            .always_on_top(true)
-            .skip_taskbar(true)
-            .focused(false)
-            .visible(false);
-        let builder = unsafe { builder.owner_raw(std::mem::transmute(target.hwnd)) };
-        let _ = builder.build();
-    }
-
-    fn place_overlay(
-        app: &AppHandle,
-        target: CodexWindow,
-        codex_app_active: bool,
-        placement: &mut OverlayPlacement,
-    ) {
-        let Some(overlay) = app.get_webview_window(&overlay_label(target.hwnd)) else {
-            return;
-        };
-        let scale = overlay.scale_factor().unwrap_or(1.0);
-        let target_width = (target.rect.right - target.rect.left) as f64 / scale;
-        let visible = codex_app_active && !target.minimized && target_width >= MIN_CODEX_WIDTH;
-        if !visible {
-            let _ = overlay.hide();
-            return;
-        }
-        let width = (OVERLAY_WIDTH * scale).round() as u32;
-        let height = (OVERLAY_HEIGHT * scale).round() as u32;
-        let anchor_x = target.rect.right - width as i32 - (RIGHT_INSET * scale).round() as i32;
-        let anchor_y = target.rect.top + (TOP_INSET * scale).round() as i32;
-        if let (Some(last), Ok(actual)) = (placement.last_applied, overlay.outer_position()) {
-            let moved_x = actual.x - last.0;
-            let moved_y = actual.y - last.1;
-            if moved_x.abs() > 1 || moved_y.abs() > 1 {
-                placement.offset_x = placement.offset_x.saturating_add(moved_x);
-                placement.offset_y = placement.offset_y.saturating_add(moved_y);
-            }
-        }
-        let x = anchor_x.saturating_add(placement.offset_x);
-        let y = anchor_y.saturating_add(placement.offset_y);
-        let _ = overlay.set_size(PhysicalSize::new(width, height));
-        let _ = overlay.set_position(PhysicalPosition::new(x, y));
-        placement.last_applied = Some((x, y));
-        if !overlay.is_visible().unwrap_or(false) {
-            let _ = overlay.show();
-        }
-    }
-
-    fn publish_usage(
-        app: &AppHandle,
-        cache: &Mutex<token_usage::TokenUsageCache>,
-        hwnd: isize,
-        conversation_id: Option<&str>,
-    ) -> ConversationTokenUsage {
-        let payload = token_usage::scan_conversation(cache, conversation_id);
-        let _ = app.emit_to(
-            overlay_label(hwnd),
-            "conversation-token-usage",
-            payload.clone(),
-        );
-        payload
-    }
-
     pub fn start(app: AppHandle, cache: Arc<Mutex<token_usage::TokenUsageCache>>) {
         thread::spawn(move || {
             let mut log_tail = LogTail::default();
             let mut renderer_to_hwnd: HashMap<String, isize> = HashMap::new();
             let mut conversations: HashMap<isize, String> = HashMap::new();
-            let mut published: HashMap<isize, ConversationTokenUsage> = HashMap::new();
-            let mut placements: HashMap<isize, OverlayPlacement> = HashMap::new();
-            let mut missing_ticks: HashMap<isize, u16> = HashMap::new();
+            let mut latest_activity: Option<ActivityEvent> = None;
+            let mut last_active_hwnd = None;
             let mut refresh_tick = 0u8;
 
             loop {
-                let windows = enumerate_codex_windows();
                 let window_handles: HashSet<isize> =
-                    windows.iter().map(|window| window.hwnd).collect();
+                    enumerate_codex_windows().into_iter().collect();
                 let foreground = unsafe { GetForegroundWindow() } as isize;
                 let codex_app_active = window_handles.contains(&foreground);
+                if codex_app_active {
+                    last_active_hwnd = Some(foreground);
+                }
 
                 for event in log_tail.read_events() {
-                    if window_handles.contains(&foreground) {
+                    latest_activity = Some(event.clone());
+                    if codex_app_active {
                         renderer_to_hwnd.insert(event.renderer_window_id.clone(), foreground);
                     }
                     if let Some(hwnd) = renderer_to_hwnd.get(&event.renderer_window_id).copied() {
                         conversations.insert(hwnd, event.conversation_id);
                     }
                 }
-
-                for target in windows.iter().copied() {
-                    missing_ticks.remove(&target.hwnd);
-                    ensure_overlay(&app, target);
-                    place_overlay(
-                        &app,
-                        target,
-                        codex_app_active,
-                        placements.entry(target.hwnd).or_default(),
-                    );
+                if codex_app_active && !conversations.contains_key(&foreground) {
+                    if let Some(event) = latest_activity.as_ref() {
+                        renderer_to_hwnd.insert(event.renderer_window_id.clone(), foreground);
+                        conversations.insert(foreground, event.conversation_id.clone());
+                    }
                 }
 
-                for hwnd in published.keys().copied().collect::<Vec<_>>() {
-                    if !window_handles.contains(&hwnd) {
-                        let ticks = missing_ticks.entry(hwnd).or_default();
-                        *ticks = ticks.saturating_add(1);
-                        if *ticks < 125 {
-                            continue;
-                        }
-                        if let Some(overlay) = app.get_webview_window(&overlay_label(hwnd)) {
-                            let _ = overlay.destroy();
-                        }
-                        missing_ticks.remove(&hwnd);
-                        published.remove(&hwnd);
-                        placements.remove(&hwnd);
-                        conversations.remove(&hwnd);
-                        renderer_to_hwnd.retain(|_, value| *value != hwnd);
-                    }
+                renderer_to_hwnd.retain(|_, hwnd| window_handles.contains(hwnd));
+                conversations.retain(|hwnd, _| window_handles.contains(hwnd));
+                if last_active_hwnd.is_some_and(|hwnd| !window_handles.contains(&hwnd)) {
+                    last_active_hwnd = None;
                 }
 
                 refresh_tick = refresh_tick.saturating_add(1);
                 if refresh_tick >= TOKEN_REFRESH_TICKS {
                     refresh_tick = 0;
-                    for hwnd in window_handles.iter().copied() {
-                        let next = publish_usage(
-                            &app,
-                            &cache,
-                            hwnd,
-                            conversations.get(&hwnd).map(String::as_str),
-                        );
-                        published.insert(hwnd, next);
-                    }
+                    let conversation_id = last_active_hwnd
+                        .and_then(|hwnd| conversations.get(&hwnd))
+                        .map(String::as_str);
+                    let payload = token_usage::scan_conversation(&cache, conversation_id);
+                    let _ = app.emit_to("widget", "conversation-token-usage", payload);
                 }
                 thread::sleep(POLL_INTERVAL);
             }

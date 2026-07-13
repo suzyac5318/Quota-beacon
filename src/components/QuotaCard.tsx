@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { clampPercent, formatCompactTokens, formatDateTime, formatExactTokens, formatResetDate, formatResetTime, getPrimaryQuota } from "../lib/format";
 import { copy, normalizeLanguage } from "../lib/i18n";
 import { quotaThemeStyle } from "../lib/quotaTheme";
-import type { Language, ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPreferences } from "../types";
+import type { ConversationTokenUsage, Language, ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPreferences } from "../types";
 import { AnimatedNumber } from "./AnimatedNumber";
 import { ProviderMark } from "./ProviderMark";
 
@@ -26,6 +26,7 @@ interface Props {
   onPalettePreview?: () => void;
   tokenUsage?: TokenUsageSummary | null;
   tokenUsageStatus?: TokenUsageStatus;
+  conversationTokenUsage?: ConversationTokenUsage;
   paletteColors?: readonly string[];
   compact?: boolean;
   hovered?: boolean;
@@ -70,6 +71,7 @@ export const QuotaCard = memo(function QuotaCard({
   onPalettePreview,
   tokenUsage = null,
   tokenUsageStatus = "loading",
+  conversationTokenUsage = { conversationId: null, totalTokens: null },
   paletteColors,
   compact = false,
   hovered = false,
@@ -104,6 +106,12 @@ export const QuotaCard = memo(function QuotaCard({
   const tokenMetricLabel = tokenUsageStatus === "ready" && tokenUsage
     ? t.tokenTotalAria(formatExactTokens(tokenUsage.totalTokens, language))
     : tokenUsageStatus === "loading" ? t.tokenLoading : t.tokenUnavailable;
+  const compactConversationTotal = conversationTokenUsage.totalTokens === null
+    ? "null"
+    : formatCompactTokens(conversationTokenUsage.totalTokens);
+  const conversationMetricLabel = conversationTokenUsage.totalTokens === null
+    ? t.tokenCurrentWindowUnavailable
+    : t.tokenCurrentWindowAria(formatExactTokens(conversationTokenUsage.totalTokens, language));
   const creditExpirations = useMemo(() => (snapshot.resetCreditExpiresAt ?? []).map((value, index) => {
     return t.creditItem(index, formatDateTime(value, language));
   }), [language, snapshot.resetCreditExpiresAt, t]);
@@ -118,73 +126,74 @@ export const QuotaCard = memo(function QuotaCard({
     >
       <div className="aurora" aria-hidden="true" />
       <span className="sr-only" aria-live="polite">{available && primary !== null ? primaryLabel : message}</span>
-      {notice ? <p className="operation-notice" role="status">{notice}</p> : null}
-      <header className="card-header quota-reveal quota-reveal--0">
-        <div>
-          <p className="eyebrow">{snapshot.displayName} · {snapshot.plan ?? t.accountFallback}</p>
-          {snapshot.status !== "stale" ? <p className="updated">{weeklyOnly ? t.weeklyRemaining : t.shortRemaining}</p> : null}
+      <div className="card-content-clip">
+        <div className="collapsed-content" aria-hidden="true">
+          {available && primary !== null ? (
+            <section className="collapsed-metric"><AnimatedNumber value={primary} /><small>%</small></section>
+          ) : (
+            <section className="collapsed-unavailable"><StatusIcon status={snapshot.status} expired={staleExpired} /></section>
+          )}
         </div>
-        {!preferences.locked ? (
-          <nav className="card-actions" aria-label={t.controls} onMouseDown={(event) => event.stopPropagation()}>
-            {providerCount > 1 ? <button onClick={onPrevious} aria-label={t.servicePrevious}><ArrowUp /></button> : null}
-            {providerCount > 1 ? <button onClick={onNext} aria-label={t.serviceNext}><ArrowDown /></button> : null}
-            <span className={`usage-indicator usage-indicator--${indicatorState}`} role="status" aria-label={indicatorLabel} title={indicatorLabel}><i /></span>
-            <button className="language-button" onClick={onLanguage} aria-label={t.switchLanguage} title={t.switchLanguage}>{language === "en" ? "中" : "EN"}</button>
-            <button onClick={onLock} aria-label={preferences.alwaysOnTop ? t.pinOff : t.pinOn} title={preferences.alwaysOnTop ? t.pinOff : t.pinOn}>
-              {preferences.alwaysOnTop ? <PushPin /> : <PushPinSlash />}
-            </button>
-          </nav>
-        ) : null}
-      </header>
 
-      {available && primary !== null ? (
-        <>
-          <div className="metric-row">
-            <section className="primary-metric" aria-label={primaryLabel}>
-              <AnimatedNumber value={primary} /><small>%</small>
-            </section>
-            <section className={`token-total token-total--${tokenUsageStatus} quota-reveal quota-reveal--1`} aria-label={tokenMetricLabel} title={tokenMetricLabel}>
-              <span>{t.tokenTotal}</span>
-              <strong>{compactTokenTotal}</strong>
-              <small>{t.tokensUnit}</small>
-            </section>
-          </div>
-          <div className="progress quota-reveal quota-reveal--2" role="progressbar" aria-label={primaryLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={primary}>
-            <span style={{ width: `${primary}%` }} />
-          </div>
-          <p className="reset-time quota-reveal quota-reveal--3">{formatResetTime(primaryQuota?.window.resetsAt ?? null, new Date(), language)}</p>
-          <footer className="card-footer quota-reveal quota-reveal--4">
-            <div className="weekly-metric">
-              {!weeklyOnly ? <p>{t.weeklyUntil(formatResetDate(snapshot.weeklyWindow?.resetsAt ?? null, language))}</p> : null}
-              {!weeklyOnly ? <strong>{weekly ?? "--"}<small>{weekly === null ? "" : "%"}</small></strong> : null}
-              <div className="reset-credit-row" onMouseDown={(event) => event.stopPropagation()}>
-                <span>{snapshot.resetCredits === null ? t.resetCreditUnknown : t.resetCredits(snapshot.resetCredits)}</span>
-                {snapshot.resetCredits !== null && snapshot.resetCredits > 0 ? (
-                  <button type="button" className="reset-credit-button" onClick={() => setShowCreditTip((value) => !value)} aria-expanded={showCreditTip} aria-label={t.view}>{t.view}</button>
-                ) : null}
-              </div>
-              {showCreditTip ? (
-                <div className="reset-credit-tip" role="status" onMouseDown={(event) => event.stopPropagation()}>
-                  {creditExpirations.length > 0 ? creditExpirations.map((item) => <p key={item}>{item}</p>) : <p>{t.noCreditExpiration}</p>}
-                </div>
-              ) : null}
+        <div className="expanded-content">
+          {notice ? <p className="operation-notice" role="status">{notice}</p> : null}
+          <header className="card-header quota-reveal quota-reveal--0">
+            <div>
+              <p className="eyebrow">{snapshot.displayName} · {snapshot.plan ?? t.accountFallback}</p>
+              {snapshot.status !== "stale" ? <p className="updated">{weeklyOnly ? t.weeklyRemaining : t.shortRemaining}</p> : null}
             </div>
-            <ProviderMark active={palettePreviewActive} onClick={onPalettePreview} />
-          </footer>
-        </>
-      ) : (
-        <section className="error-state" aria-live="polite">
-          <div className="status-icon" aria-hidden="true"><StatusIcon status={snapshot.status} expired={staleExpired} /></div>
-          <strong className="quota-reveal quota-reveal--1">{snapshot.status === "signed_out" ? t.signedInRequired : staleExpired ? t.staleExpired : t.temporarilyUnavailable}</strong>
-          <p className="quota-reveal quota-reveal--2">{message ?? t.errorUnavailable}</p>
-          {snapshot.status === "stale" ? (
-            <button type="button" className="error-refresh-button quota-reveal quota-reveal--3" onMouseDown={(event) => event.stopPropagation()} onClick={onRefresh} disabled={!onRefresh} aria-label={t.refreshQuota}>
-              <ArrowClockwise />
-              <span>{t.refresh}</span>
-            </button>
-          ) : null}
-        </section>
-      )}
+            {!preferences.locked ? (
+              <nav className="card-actions" aria-label={t.controls} onMouseDown={(event) => event.stopPropagation()}>
+                {providerCount > 1 ? <button onClick={onPrevious} aria-label={t.servicePrevious}><ArrowUp /></button> : null}
+                {providerCount > 1 ? <button onClick={onNext} aria-label={t.serviceNext}><ArrowDown /></button> : null}
+                <span className={`usage-indicator usage-indicator--${indicatorState}`} role="status" aria-label={indicatorLabel} title={indicatorLabel}><i /></span>
+                <button className="language-button" onClick={onLanguage} aria-label={t.switchLanguage} title={t.switchLanguage}>{language === "en" ? "中" : "EN"}</button>
+                <button onClick={onLock} aria-label={preferences.alwaysOnTop ? t.pinOff : t.pinOn} title={preferences.alwaysOnTop ? t.pinOff : t.pinOn}>{preferences.alwaysOnTop ? <PushPin /> : <PushPinSlash />}</button>
+              </nav>
+            ) : null}
+          </header>
+
+          {available && primary !== null ? (
+            <>
+              <div className="metric-row">
+                <section className="primary-metric expanded-primary" aria-label={primaryLabel}><AnimatedNumber value={primary} /><small>%</small></section>
+                <section className={`token-total token-total--${tokenUsageStatus} quota-reveal quota-reveal--1`} aria-label={tokenMetricLabel} title={tokenMetricLabel}>
+                  <div className="token-current" aria-label={conversationMetricLabel} title={conversationMetricLabel}>
+                    <span>{t.tokenCurrentWindow}</span>
+                    <strong>{compactConversationTotal}</strong>
+                  </div>
+                  <div className="token-cumulative">
+                    <span>{t.tokenTotal}</span>
+                    <strong>{compactTokenTotal}</strong>
+                  </div>
+                  <small>{t.tokensUnit}</small>
+                </section>
+              </div>
+              <div className="progress quota-reveal quota-reveal--2" role="progressbar" aria-label={primaryLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={primary}><span style={{ width: `${primary}%` }} /></div>
+              <p className="reset-time quota-reveal quota-reveal--3">{formatResetTime(primaryQuota?.window.resetsAt ?? null, new Date(), language)}</p>
+              <footer className="card-footer quota-reveal quota-reveal--4">
+                <div className="weekly-metric">
+                  {!weeklyOnly ? <p>{t.weeklyUntil(formatResetDate(snapshot.weeklyWindow?.resetsAt ?? null, language))}</p> : null}
+                  {!weeklyOnly ? <strong>{weekly ?? "--"}<small>{weekly === null ? "" : "%"}</small></strong> : null}
+                  <div className="reset-credit-row" onMouseDown={(event) => event.stopPropagation()}>
+                    <span>{snapshot.resetCredits === null ? t.resetCreditUnknown : t.resetCredits(snapshot.resetCredits)}</span>
+                    {snapshot.resetCredits !== null && snapshot.resetCredits > 0 ? <button type="button" className="reset-credit-button" onClick={() => setShowCreditTip((value) => !value)} aria-expanded={showCreditTip} aria-label={t.view}>{t.view}</button> : null}
+                  </div>
+                  {showCreditTip ? <div className="reset-credit-tip" role="status" onMouseDown={(event) => event.stopPropagation()}>{creditExpirations.length > 0 ? creditExpirations.map((item) => <p key={item}>{item}</p>) : <p>{t.noCreditExpiration}</p>}</div> : null}
+                </div>
+                <ProviderMark active={palettePreviewActive} onClick={onPalettePreview} />
+              </footer>
+            </>
+          ) : (
+            <section className="error-state" aria-live="polite">
+              <div className="status-icon quota-reveal quota-reveal--0" aria-hidden="true"><StatusIcon status={snapshot.status} expired={staleExpired} /></div>
+              <strong className="quota-reveal quota-reveal--1">{snapshot.status === "signed_out" ? t.signedInRequired : staleExpired ? t.staleExpired : t.temporarilyUnavailable}</strong>
+              <p className="quota-reveal quota-reveal--2">{message ?? t.errorUnavailable}</p>
+              {snapshot.status === "stale" ? <button type="button" className="error-refresh-button quota-reveal quota-reveal--3" onMouseDown={(event) => event.stopPropagation()} onClick={onRefresh} disabled={!onRefresh} aria-label={t.refreshQuota}><ArrowClockwise /><span>{t.refresh}</span></button> : null}
+            </section>
+          )}
+        </div>
+      </div>
     </main>
   );
 });

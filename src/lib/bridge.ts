@@ -1,4 +1,4 @@
-import type { ProviderSnapshot, TokenUsageSummary, WidgetPreferences } from "../types";
+import type { ConversationTokenUsage, ProviderSnapshot, TokenUsageSummary, WidgetPreferences } from "../types";
 import { DEFAULT_PALETTE_COLORS } from "./quotaTheme";
 
 const defaultPreferences: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN", paletteColors: [...DEFAULT_PALETTE_COLORS] };
@@ -144,11 +144,13 @@ export async function listenDesktopEvents(handlers: {
   onPreferences: (value: WidgetPreferences) => void;
   onRefresh: () => void;
   onFocusLost: () => void;
+  onConversationTokenUsage: (value: ConversationTokenUsage) => void;
 }): Promise<() => void> {
   if (!isTauri()) return () => undefined;
   const { listen } = await import("@tauri-apps/api/event");
   const unlistenPreferences = await listen<WidgetPreferences>("preferences-changed", (event) => handlers.onPreferences(event.payload));
   const unlistenRefresh = await listen("refresh-requested", handlers.onRefresh);
   const unlistenFocusLost = await listen("widget-focus-lost", handlers.onFocusLost);
-  return () => { unlistenPreferences(); unlistenRefresh(); unlistenFocusLost(); };
+  const unlistenConversationTokenUsage = await listen<ConversationTokenUsage>("conversation-token-usage", (event) => handlers.onConversationTokenUsage(event.payload));
+  return () => { unlistenPreferences(); unlistenRefresh(); unlistenFocusLost(); unlistenConversationTokenUsage(); };
 }

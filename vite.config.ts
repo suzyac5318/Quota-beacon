@@ -7,5 +7,5 @@ export default defineConfig({
   server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/target/**"] } },
   envPrefix: ["VITE_", "TAURI_ENV_"],
   build: { rollupOptions: { input: "index.html" } },
-  test: { exclude: ["node_modules/**", "dist/**", "release/**", "src-tauri/target/**"] },
+  test: { exclude: ["node_modules/**", "dist/**", "release/**", "work/**", "src-tauri/target/**"] },
 });

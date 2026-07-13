@@ -5,7 +5,7 @@ import { clampPercent, getPrimaryQuota } from "./lib/format";
 import { copy, nextLanguage, normalizeLanguage } from "./lib/i18n";
 import { DEFAULT_PALETTE_COLORS, normalizePaletteColors } from "./lib/quotaTheme";
 import { mergeSnapshots } from "./lib/snapshots";
-import type { ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPreferences } from "./types";
+import type { ConversationTokenUsage, ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPreferences } from "./types";
 
 const DEFAULT_PREFS: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN", paletteColors: [...DEFAULT_PALETTE_COLORS] };
 const REFRESH_INTERVAL_MS = 10_000;
@@ -26,6 +26,7 @@ export default function App() {
   const [paletteDraft, setPaletteDraft] = useState<string[] | null>(null);
   const [tokenUsage, setTokenUsage] = useState<TokenUsageSummary | null>(null);
   const [tokenUsageStatus, setTokenUsageStatus] = useState<TokenUsageStatus>("loading");
+  const [conversationTokenUsage, setConversationTokenUsage] = useState<ConversationTokenUsage>({ conversationId: null, totalTokens: null });
   const failures = useRef(0);
   const previousPrimary = useRef(new Map<string, number>());
   const consumptionTimers = useRef(new Map<string, number>());
@@ -164,6 +165,7 @@ export default function App() {
         }
         scheduleCollapse(false);
       },
+      onConversationTokenUsage: setConversationTokenUsage,
     }).then((value) => {
       if (cancelled) value(); else cleanup = value;
     }).catch(() => setOperationError("Desktop event listener failed to start."));
@@ -291,6 +293,7 @@ export default function App() {
       onPalettePreview={handlePalettePreview}
       tokenUsage={tokenUsage}
       tokenUsageStatus={tokenUsageStatus}
+      conversationTokenUsage={conversationTokenUsage}
       paletteColors={activePaletteColors}
       compact={compact}
       hovered={hovered}
