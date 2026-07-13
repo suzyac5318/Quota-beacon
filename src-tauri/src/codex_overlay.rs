@@ -43,6 +43,13 @@ mod windows_impl {
     }
 
     #[derive(Default)]
+    struct OverlayPlacement {
+        offset_x: i32,
+        offset_y: i32,
+        last_applied: Option<(i32, i32)>,
+    }
+
+    #[derive(Default)]
     struct LogTail {
         path: Option<PathBuf>,
         offset: u64,
@@ -227,12 +234,15 @@ mod windows_impl {
             .focused(false)
             .visible(false);
         let builder = unsafe { builder.owner_raw(std::mem::transmute(target.hwnd)) };
-        if let Ok(window) = builder.build() {
-            let _ = window.set_ignore_cursor_events(true);
-        }
+        let _ = builder.build();
     }
 
-    fn place_overlay(app: &AppHandle, target: CodexWindow, codex_app_active: bool) {
+    fn place_overlay(
+        app: &AppHandle,
+        target: CodexWindow,
+        codex_app_active: bool,
+        placement: &mut OverlayPlacement,
+    ) {
         let Some(overlay) = app.get_webview_window(&overlay_label(target.hwnd)) else {
             return;
         };
@@ -245,10 +255,21 @@ mod windows_impl {
         }
         let width = (OVERLAY_WIDTH * scale).round() as u32;
         let height = (OVERLAY_HEIGHT * scale).round() as u32;
-        let x = target.rect.right - width as i32 - (RIGHT_INSET * scale).round() as i32;
-        let y = target.rect.top + (TOP_INSET * scale).round() as i32;
+        let anchor_x = target.rect.right - width as i32 - (RIGHT_INSET * scale).round() as i32;
+        let anchor_y = target.rect.top + (TOP_INSET * scale).round() as i32;
+        if let (Some(last), Ok(actual)) = (placement.last_applied, overlay.outer_position()) {
+            let moved_x = actual.x - last.0;
+            let moved_y = actual.y - last.1;
+            if moved_x.abs() > 1 || moved_y.abs() > 1 {
+                placement.offset_x = placement.offset_x.saturating_add(moved_x);
+                placement.offset_y = placement.offset_y.saturating_add(moved_y);
+            }
+        }
+        let x = anchor_x.saturating_add(placement.offset_x);
+        let y = anchor_y.saturating_add(placement.offset_y);
         let _ = overlay.set_size(PhysicalSize::new(width, height));
         let _ = overlay.set_position(PhysicalPosition::new(x, y));
+        placement.last_applied = Some((x, y));
         if !overlay.is_visible().unwrap_or(false) {
             let _ = overlay.show();
         }
@@ -275,6 +296,7 @@ mod windows_impl {
             let mut renderer_to_hwnd: HashMap<String, isize> = HashMap::new();
             let mut conversations: HashMap<isize, String> = HashMap::new();
             let mut published: HashMap<isize, ConversationTokenUsage> = HashMap::new();
+            let mut placements: HashMap<isize, OverlayPlacement> = HashMap::new();
             let mut missing_ticks: HashMap<isize, u16> = HashMap::new();
             let mut refresh_tick = 0u8;
 
@@ -297,7 +319,12 @@ mod windows_impl {
                 for target in windows.iter().copied() {
                     missing_ticks.remove(&target.hwnd);
                     ensure_overlay(&app, target);
-                    place_overlay(&app, target, codex_app_active);
+                    place_overlay(
+                        &app,
+                        target,
+                        codex_app_active,
+                        placements.entry(target.hwnd).or_default(),
+                    );
                 }
 
                 for hwnd in published.keys().copied().collect::<Vec<_>>() {
@@ -312,6 +339,7 @@ mod windows_impl {
                         }
                         missing_ticks.remove(&hwnd);
                         published.remove(&hwnd);
+                        placements.remove(&hwnd);
                         conversations.remove(&hwnd);
                         renderer_to_hwnd.retain(|_, value| *value != hwnd);
                     }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { formatCompactTokens } from "../lib/format";
+import { startDragging } from "../lib/bridge";
 
 interface ConversationTokenUsage {
   conversationId: string | null;
@@ -34,7 +35,13 @@ export function ConversationTokenOverlay() {
     : `当前对话累计 ${usage.totalTokens.toLocaleString("zh-CN")} Tokens`;
 
   return (
-    <output className={`conversation-token${usage.totalTokens === null ? " conversation-token--null" : ""}`} aria-label={label} title={label}>
+    <output
+      className={`conversation-token${usage.totalTokens === null ? " conversation-token--null" : ""}`}
+      aria-label={label}
+      aria-live="polite"
+      title={label}
+      onPointerDown={() => void startDragging()}
+    >
       {value}
     </output>
   );
