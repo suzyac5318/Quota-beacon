@@ -23,6 +23,25 @@ pub struct ProviderSnapshot {
     pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TokenUsageSummary {
+    pub input_tokens: u64,
+    pub cached_input_tokens: u64,
+    pub output_tokens: u64,
+    pub reasoning_output_tokens: u64,
+    pub total_tokens: u64,
+    pub session_count: u64,
+    pub updated_at: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConversationTokenUsage {
+    pub conversation_id: Option<String>,
+    pub total_tokens: Option<u64>,
+}
+
 impl ProviderSnapshot {
     pub fn failure(status: &str, message: &str) -> Self {
         Self {
@@ -50,14 +69,37 @@ pub struct WidgetPreferences {
     pub auto_rotate_seconds: u64,
     #[serde(default = "default_language")]
     pub language: String,
+    #[serde(default = "default_palette_colors")]
+    pub palette_colors: Vec<String>,
 }
 
 fn default_always_on_top() -> bool { true }
 fn default_language() -> String { "zh-CN".into() }
+fn default_palette_colors() -> Vec<String> {
+    ["#eb5b58", "#f1a06f", "#f5d98f", "#e3f4b8", "#b9e4c9"]
+        .into_iter()
+        .map(String::from)
+        .collect()
+}
+
+pub(crate) fn valid_palette_colors(colors: &[String]) -> bool {
+    colors.len() == 5 && colors.iter().all(|color| {
+        color.len() == 7
+            && color.starts_with('#')
+            && color[1..].bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
+}
 
 impl Default for WidgetPreferences {
     fn default() -> Self {
-        Self { locked: false, always_on_top: true, pinned_provider: None, auto_rotate_seconds: 12, language: default_language() }
+        Self {
+            locked: false,
+            always_on_top: true,
+            pinned_provider: None,
+            auto_rotate_seconds: 12,
+            language: default_language(),
+            palette_colors: default_palette_colors(),
+        }
     }
 }
 
@@ -69,6 +111,11 @@ impl WidgetPreferences {
         }
         if self.language != "en" && self.language != "zh-CN" {
             self.language = default_language();
+        }
+        if !valid_palette_colors(&self.palette_colors) {
+            self.palette_colors = default_palette_colors();
+        } else {
+            self.palette_colors = self.palette_colors.iter().map(|color| color.to_ascii_lowercase()).collect();
         }
         self
     }

@@ -236,7 +236,23 @@ fn find_window<'a>(
 ) -> Option<&'a Value> {
     for name in names {
         if let Some(value) = rate_limit.get(*name) {
-            if parse_window(Some(value)).is_some() {
+            if let Some(window) = parse_window(Some(value)) {
+                let duration_matches = window.window_seconds == 0
+                    || expected_seconds == 0
+                    || window.window_seconds.abs_diff(expected_seconds) <= 60;
+                if duration_matches {
+                    return Some(value);
+                }
+            }
+        }
+    }
+
+    if let Some(fields) = rate_limit.as_object() {
+        for value in fields.values() {
+            let Some(window) = parse_window(Some(value)) else {
+                continue;
+            };
+            if expected_seconds > 0 && window.window_seconds.abs_diff(expected_seconds) <= 60 {
                 return Some(value);
             }
         }
@@ -370,8 +386,8 @@ pub async fn fetch_snapshot(client: &reqwest::Client) -> ProviderSnapshot {
         ],
         604_800,
     ));
-    if short_window.is_none() {
-        return ProviderSnapshot::failure("unavailable", "Quota response is missing the 5h window.");
+    if short_window.is_none() && weekly_window.is_none() {
+        return ProviderSnapshot::failure("unavailable", "Quota response is missing usage windows.");
     }
 
     let usage_credits = usage
@@ -521,5 +537,51 @@ mod tests {
                 .unwrap();
         assert_eq!(short.remaining_percent, 51.0);
         assert_eq!(weekly.remaining_percent, 88.0);
+    }
+
+    #[test]
+    fn accepts_a_weekly_window_without_a_short_window() {
+        let rate_limit = serde_json::json!({
+            "weekly_window": {
+                "remainingPercent": 99,
+                "windowSeconds": 604800
+            }
+        });
+        let short = parse_window(find_window(
+            &rate_limit,
+            &["primary_window", "primary"],
+            18_000,
+        ));
+        let weekly = parse_window(find_window(
+            &rate_limit,
+            &["weekly_window", "weekly"],
+            604_800,
+        ));
+
+        assert!(short.is_none());
+        assert_eq!(weekly.unwrap().remaining_percent, 99.0);
+    }
+
+    #[test]
+    fn classifies_a_weekly_primary_window_by_duration() {
+        let rate_limit = serde_json::json!({
+            "primary_window": {
+                "usedPercent": 5,
+                "windowSeconds": 604800
+            }
+        });
+        let short = parse_window(find_window(
+            &rate_limit,
+            &["primary_window", "primary"],
+            18_000,
+        ));
+        let weekly = parse_window(find_window(
+            &rate_limit,
+            &["weekly_window", "weekly"],
+            604_800,
+        ));
+
+        assert!(short.is_none());
+        assert_eq!(weekly.unwrap().remaining_percent, 95.0);
     }
 }

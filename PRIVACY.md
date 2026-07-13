@@ -1,6 +1,6 @@
 # Privacy
 
-Quota Float is designed to be local-first and minimal.
+Quota Beacon is designed to be local-first and minimal.
 
 ## What It Reads
 
@@ -10,7 +10,7 @@ Quota Float is designed to be local-first and minimal.
 
 ## What It Stores
 
-Quota Float stores only widget preferences in its own application config directory:
+Quota Beacon stores only widget preferences in its own application config directory:
 
 - locked state
 - always-on-top state
@@ -34,4 +34,4 @@ Logs are intentionally generic. They must not include tokens, account IDs, raw b
 
 ## Accuracy Boundary
 
-Quota Float displays quota windows returned by the Codex quota service. It does not estimate quota from local token usage and does not fabricate values when the response shape is unknown.
+Quota Beacon displays quota windows returned by the Codex quota service. It does not estimate quota from local token usage and does not fabricate values when the response shape is unknown.

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Quota Beacon application icon</title>
+  <defs>
+    <linearGradient id="background" x1="80" y1="52" x2="432" y2="460" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#152238"/>
+      <stop offset="1" stop-color="#07111F"/>
+    </linearGradient>
+    <linearGradient id="signal" x1="160" y1="130" x2="352" y2="382" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A9F4D2"/>
+      <stop offset=".5" stop-color="#62DCC1"/>
+      <stop offset="1" stop-color="#35A7D9"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#background)"/>
+  <path d="M256 102C178.7 102 116 164.7 116 242M396 242C396 164.7 333.3 102 256 102M256 410C333.3 410 396 347.3 396 270M116 270C116 347.3 178.7 410 256 410" fill="none" stroke="#4AD6C3" stroke-linecap="round" stroke-width="30" opacity=".32"/>
+  <path d="M256 148C204.1 148 162 190.1 162 242M350 242C350 190.1 307.9 148 256 148M256 364C307.9 364 350 321.9 350 270M162 270C162 321.9 204.1 364 256 364" fill="none" stroke="url(#signal)" stroke-linecap="round" stroke-width="28"/>
+  <circle cx="256" cy="256" r="67" fill="#D9FFF1" filter="url(#glow)"/>
+  <path d="M256 211L274 244L307 256L274 268L256 301L238 268L205 256L238 244L256 211Z" fill="#0F2940"/>
+</svg>

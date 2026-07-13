@@ -1,6 +1,12 @@
-import type { ProviderSnapshot, WidgetPreferences } from "../types";
+import type { ProviderSnapshot, TokenUsageSummary, WidgetPreferences } from "../types";
+import { DEFAULT_PALETTE_COLORS } from "./quotaTheme";
 
-const defaultPreferences: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN" };
+const defaultPreferences: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN", paletteColors: [...DEFAULT_PALETTE_COLORS] };
+
+export interface PaletteSessionPayload {
+  percent: number;
+  colors: string[];
+}
 
 const mockSnapshot: ProviderSnapshot = {
   provider: "codex",
@@ -15,12 +21,28 @@ const mockSnapshot: ProviderSnapshot = {
   message: null,
 };
 
+const mockTokenUsage: TokenUsageSummary = {
+  inputTokens: 12_328_760,
+  cachedInputTokens: 8_102_400,
+  outputTokens: 129_560,
+  reasoningOutputTokens: 34_280,
+  totalTokens: 12_458_320,
+  sessionCount: 92,
+  updatedAt: new Date().toISOString(),
+};
+
 export const isTauri = () => "__TAURI_INTERNALS__" in window;
 
 export async function fetchSnapshots(force = false): Promise<ProviderSnapshot[]> {
   if (!isTauri()) return [mockSnapshot];
   const { invoke } = await import("@tauri-apps/api/core");
   return invoke<ProviderSnapshot[]>(force ? "refresh_snapshots" : "get_snapshots");
+}
+
+export async function fetchTokenUsage(): Promise<TokenUsageSummary> {
+  if (!isTauri()) return mockTokenUsage;
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<TokenUsageSummary>("get_token_usage");
 }
 
 export async function getPreferences(): Promise<WidgetPreferences> {
@@ -58,6 +80,60 @@ export async function setWidgetExpanded(expanded: boolean): Promise<void> {
   const { getCurrentWindow, LogicalSize } = await import("@tauri-apps/api/window");
   const size = expanded ? new LogicalSize(320, 320) : new LogicalSize(100, 100);
   await getCurrentWindow().setSize(size);
+}
+
+export async function openPalettePreview(percent: number): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("open_palette_preview", { percent });
+}
+
+export async function updatePalettePreview(percent: number): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("update_palette_preview", { percent });
+}
+
+export async function updatePaletteColors(colors: readonly string[]): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("update_palette_colors", { colors: [...colors] });
+}
+
+export async function savePaletteColors(colors: readonly string[]): Promise<WidgetPreferences> {
+  if (!isTauri()) return { ...defaultPreferences, paletteColors: [...colors] };
+  const { invoke } = await import("@tauri-apps/api/core");
+  return invoke<WidgetPreferences>("save_palette_colors", { colors: [...colors] });
+}
+
+export async function closePalettePreview(): Promise<void> {
+  if (!isTauri()) return;
+  const { invoke } = await import("@tauri-apps/api/core");
+  await invoke("close_palette_preview");
+}
+
+export async function listenPalettePreview(handlers: {
+  onChanged: (percent: number) => void;
+  onColorsChanged: (colors: string[]) => void;
+  onClosed: () => void;
+}): Promise<() => void> {
+  if (!isTauri()) return () => undefined;
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlistenChanged = await listen<number>("palette-preview-changed", (event) => handlers.onChanged(event.payload));
+  const unlistenColors = await listen<string[]>("palette-colors-changed", (event) => handlers.onColorsChanged(event.payload));
+  const unlistenClosed = await listen("palette-preview-closed", handlers.onClosed);
+  return () => { unlistenChanged(); unlistenColors(); unlistenClosed(); };
+}
+
+export async function listenPaletteController(handlers: {
+  onOpened: (payload: PaletteSessionPayload) => void;
+  onColorsChanged: (colors: string[]) => void;
+}): Promise<() => void> {
+  if (!isTauri()) return () => undefined;
+  const { listen } = await import("@tauri-apps/api/event");
+  const unlistenOpened = await listen<PaletteSessionPayload>("palette-preview-opened", (event) => handlers.onOpened(event.payload));
+  const unlistenColors = await listen<string[]>("palette-colors-changed", (event) => handlers.onColorsChanged(event.payload));
+  return () => { unlistenOpened(); unlistenColors(); };
 }
 
 export async function listenDesktopEvents(handlers: {

@@ -1,8 +1,40 @@
 import { copy, normalizeLanguage } from "./i18n";
-import type { Language, ProviderSnapshot } from "../types";
+import type { Language, ProviderSnapshot, UsageWindow } from "../types";
+
+export interface PrimaryQuota {
+  kind: "short" | "weekly";
+  window: UsageWindow;
+}
+
+export function getPrimaryQuota(snapshot: ProviderSnapshot): PrimaryQuota | null {
+  if (snapshot.shortWindow) return { kind: "short", window: snapshot.shortWindow };
+  if (snapshot.weeklyWindow) return { kind: "weekly", window: snapshot.weeklyWindow };
+  return null;
+}
 
 export function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+export function formatCompactTokens(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return "--";
+  const units = ["", "K", "M", "B", "T"];
+  let unit = Math.min(Math.floor(Math.log10(Math.max(1, value)) / 3), units.length - 1);
+  let scaled = value / (1000 ** unit);
+  let rounded = Number(scaled.toFixed(1));
+  if (rounded >= 1000 && unit < units.length - 1) {
+    unit += 1;
+    scaled = value / (1000 ** unit);
+    rounded = Number(scaled.toFixed(1));
+  }
+  const formatted = new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: unit === 0 ? 0 : 1,
+  }).format(rounded);
+  return `${formatted}${units[unit]}`;
+}
+
+export function formatExactTokens(value: number, language: Language): string {
+  return new Intl.NumberFormat(language === "en" ? "en-US" : "zh-CN").format(value);
 }
 
 export function quotaTier(percent: number | null): "unknown" | "healthy" | "caution" | "critical" {

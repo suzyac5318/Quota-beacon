@@ -15,13 +15,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact-name: quota-float-windows-unsigned
-            archive-name: quota-float-windows-unsigned.zip
+            artifact-name: quota-beacon-windows-unsigned
+            archive-name: quota-beacon-windows-unsigned.zip
             build-command: npm run tauri -- build
             artifact-path: src-tauri/target/release/bundle/*
           - os: macos-latest
-            artifact-name: quota-float-macos-universal-unsigned
-            archive-name: quota-float-macos-universal-unsigned.zip
+            artifact-name: quota-beacon-macos-universal-unsigned
+            archive-name: quota-beacon-macos-universal-unsigned.zip
             build-command: npm run tauri -- build --target universal-apple-darwin
             artifact-path: src-tauri/target/universal-apple-darwin/release/bundle/*
     runs-on: ${{ matrix.os }}

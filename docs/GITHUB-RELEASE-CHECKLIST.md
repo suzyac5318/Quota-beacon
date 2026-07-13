@@ -27,22 +27,21 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
 ## 第一次上传到 GitHub
 
-如果本地仓库还没有 remote，先在 GitHub 创建一个空仓库，然后执行：
+当前 `upstream` 只用于读取衍生项目的上游历史，绝不可推送。先在 GitHub 创建 Quota Beacon 的空仓库，再执行：
 
 ```bash
 git remote add origin https://github.com/<owner>/<repo>.git
 git branch -M main
-git add .
-git commit -m "Prepare Windows and macOS unsigned release"
-git push -u origin main
+git push -u origin main --follow-tags
 ```
 
-如果已经有 remote，只需要：
+后续版本完成后，更新 `VERSION`、各构建配置和 `CHANGELOG.md`，创建版本化提交和标签，再推送：
 
 ```bash
-git add .
-git commit -m "Prepare Windows and macOS unsigned release"
-git push origin main
+git add <expected-files>
+git commit -m "v1.0.1: describe the completed work"
+git tag -a v1.0.1 -m "Quota Beacon v1.0.1"
+git push origin main --follow-tags
 ```
 
 ## 生成可分享版本
@@ -50,14 +49,14 @@ git push origin main
 推送 `v*` tag 会触发 release workflow：
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 构建完成后，到 GitHub 仓库的 Releases 页面检查 draft release。附件应包含：
 
-- `quota-float-windows-unsigned.zip`
-- `quota-float-macos-universal-unsigned.zip`
+- `quota-beacon-windows-unsigned.zip`
+- `quota-beacon-macos-universal-unsigned.zip`
 
 确认无误后点击 Publish release，然后把 Release 链接发给用户。
 
@@ -65,7 +64,7 @@ git push origin v0.1.0
 
 当前 macOS 包是 unsigned 包。用户首次打开可能会被 Gatekeeper 拦截，可以这样打开：
 
-1. 下载 `quota-float-macos-universal-unsigned.zip`。
+1. 下载 `quota-beacon-macos-universal-unsigned.zip`。
 2. 解压后把应用拖到 Applications 或任意测试目录。
 3. 右键点击应用，选择 Open。
 4. 在系统提示里再次选择 Open。

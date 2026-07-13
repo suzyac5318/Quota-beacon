@@ -1,11 +1,11 @@
-# Quota Float 0.1.0
+# Quota Beacon 1.0.0
 
-Quota Float is a lightweight floating desktop widget for checking Codex quota from the local Codex Desktop login state.
+Quota Beacon is a local-first floating desktop widget for checking Codex usage limits from the local Codex Desktop login state.
 
 ## Downloads
 
-- Windows unsigned: `quota-float-windows-unsigned.zip`
-- macOS Universal unsigned: `quota-float-macos-universal-unsigned.zip`
+- Windows unsigned: `quota-beacon-windows-unsigned.zip`
+- macOS Universal unsigned: `quota-beacon-macos-universal-unsigned.zip`
 
 ## Install
 
@@ -23,7 +23,7 @@ This macOS build is unsigned and not notarized. If macOS blocks the first launch
 
 ## Privacy
 
-Quota Float does not store Codex tokens, account IDs, prompts, chats, raw quota responses, or local auth paths. It stores only widget preferences. See `PRIVACY.md`.
+Quota Beacon does not store Codex tokens, account IDs, prompts, chats, raw quota responses, or local auth paths. It stores only widget preferences. See `PRIVACY.md`.
 
 ## Notes
 

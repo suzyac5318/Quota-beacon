@@ -1,12 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { QuotaCard, QuotaOrb } from "./components/QuotaCard";
-import { fetchSnapshots, getPreferences, listenDesktopEvents, setAlwaysOnTop, setWidgetExpanded, startDragging, updatePreferences } from "./lib/bridge";
-import { needsFastRefresh } from "./lib/format";
+import { closePalettePreview, fetchSnapshots, fetchTokenUsage, getPreferences, listenDesktopEvents, listenPalettePreview, openPalettePreview, setAlwaysOnTop, setWidgetExpanded, startDragging, updatePreferences } from "./lib/bridge";
+import { clampPercent, getPrimaryQuota } from "./lib/format";
 import { copy, nextLanguage, normalizeLanguage } from "./lib/i18n";
+import { DEFAULT_PALETTE_COLORS, normalizePaletteColors } from "./lib/quotaTheme";
 import { mergeSnapshots } from "./lib/snapshots";
-import type { ProviderSnapshot, WidgetPreferences } from "./types";
+import type { ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPreferences } from "./types";
 
-const DEFAULT_PREFS: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN" };
+const DEFAULT_PREFS: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN", paletteColors: [...DEFAULT_PALETTE_COLORS] };
+const REFRESH_INTERVAL_MS = 10_000;
+const TOKEN_USAGE_REFRESH_INTERVAL_MS = 60_000;
 
 export default function App() {
   const [snapshots, setSnapshots] = useState<ProviderSnapshot[]>([]);
@@ -16,9 +19,15 @@ export default function App() {
   const [compact, setCompact] = useState(() => window.innerWidth <= 120 || window.innerHeight <= 120);
   const [consumingProviders, setConsumingProviders] = useState<Set<string>>(() => new Set());
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [palettePercent, setPalettePercent] = useState<number | null>(null);
+  const [paletteDraft, setPaletteDraft] = useState<string[] | null>(null);
+  const [tokenUsage, setTokenUsage] = useState<TokenUsageSummary | null>(null);
+  const [tokenUsageStatus, setTokenUsageStatus] = useState<TokenUsageStatus>("loading");
   const failures = useRef(0);
   const previousPrimary = useRef(new Map<string, number>());
   const consumptionTimers = useRef(new Map<string, number>());
+  const paletteActive = useRef(false);
+  const hoveredRef = useRef(false);
   const language = normalizeLanguage(preferences.language);
   const t = copy[language];
 
@@ -29,7 +38,7 @@ export default function App() {
       if (hasFailure) failures.current += 1;
       else failures.current = 0;
       for (const item of values) {
-        const nextPrimary = item.shortWindow?.remainingPercent;
+        const nextPrimary = getPrimaryQuota(item)?.window.remainingPercent;
         const previous = previousPrimary.current.get(item.provider);
         if (nextPrimary !== undefined && previous !== undefined && nextPrimary < previous) {
           setConsumingProviders((current) => new Set(current).add(item.provider));
@@ -52,11 +61,57 @@ export default function App() {
     }
   }, []);
 
+  const refreshTokenUsage = useCallback(async () => {
+    try {
+      const value = await fetchTokenUsage();
+      setTokenUsage(value);
+      setTokenUsageStatus("ready");
+    } catch {
+      setTokenUsage(null);
+      setTokenUsageStatus("unavailable");
+    }
+  }, []);
+
   useEffect(() => {
+    let cancelled = false;
+    const loadPreferences = async () => {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const value = await getPreferences();
+          if (!cancelled) {
+            setPreferences({ ...DEFAULT_PREFS, ...value, language: normalizeLanguage(value.language), paletteColors: normalizePaletteColors(value.paletteColors) });
+            setOperationError(null);
+          }
+          return;
+        } catch {
+          if (attempt < 2) await new Promise((resolve) => window.setTimeout(resolve, 300));
+        }
+      }
+      if (!cancelled) setOperationError("Unable to read settings. Defaults are in use.");
+    };
     void refresh(true);
-    void getPreferences().then((value) => setPreferences({ ...DEFAULT_PREFS, ...value, language: normalizeLanguage(value.language) })).catch(() => setOperationError("Unable to read settings. Defaults are in use."));
-    return () => { for (const timer of consumptionTimers.current.values()) window.clearTimeout(timer); consumptionTimers.current.clear(); };
+    void loadPreferences();
+    return () => { cancelled = true; for (const timer of consumptionTimers.current.values()) window.clearTimeout(timer); consumptionTimers.current.clear(); };
   }, [refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let cleanup = () => {};
+    void listenPalettePreview({
+      onChanged: (value) => setPalettePercent(clampPercent(value)),
+      onColorsChanged: (colors) => setPaletteDraft(normalizePaletteColors(colors)),
+      onClosed: () => {
+        paletteActive.current = false;
+        setPalettePercent(null);
+        setPaletteDraft(null);
+        if (!hoveredRef.current) {
+          setCompact(true);
+          void setWidgetExpanded(false);
+        }
+      },
+    }).then((unlisten) => { if (cancelled) unlisten(); else cleanup = unlisten; });
+    return () => { cancelled = true; cleanup(); };
+  }, []);
 
   useEffect(() => {
     const updateCompact = () => setCompact(window.innerWidth <= 120 || window.innerHeight <= 120);
@@ -68,22 +123,22 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     let cleanup: () => void = () => {};
-    void listenDesktopEvents({ onPreferences: (value) => setPreferences({ ...DEFAULT_PREFS, ...value, language: normalizeLanguage(value.language) }), onRefresh: () => void refresh(true) }).then((value) => {
+    void listenDesktopEvents({ onPreferences: (value) => { setPreferences({ ...DEFAULT_PREFS, ...value, language: normalizeLanguage(value.language), paletteColors: normalizePaletteColors(value.paletteColors) }); setOperationError(null); }, onRefresh: () => void refresh(true) }).then((value) => {
       if (cancelled) value(); else cleanup = value;
     }).catch(() => setOperationError("Desktop event listener failed to start."));
     return () => { cancelled = true; cleanup(); };
   }, [refresh]);
 
-  const refreshMs = useMemo(() => {
-    const backoff = failures.current === 0 ? 5 * 60_000 : Math.min(30 * 60_000, 30_000 * 2 ** (failures.current - 1));
-    if (failures.current === 0 && snapshots.some((item) => item.status === "ok" && needsFastRefresh(item))) return 60_000;
-    return backoff;
-  }, [snapshots]);
+  useEffect(() => {
+    const id = window.setInterval(() => void refresh(true), REFRESH_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [refresh]);
 
   useEffect(() => {
-    const id = window.setInterval(() => void refresh(), refreshMs);
+    void refreshTokenUsage();
+    const id = window.setInterval(() => void refreshTokenUsage(), TOKEN_USAGE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [refresh, refreshMs]);
+  }, [refreshTokenUsage]);
 
   useEffect(() => {
     const refreshWhenActive = () => { if (document.visibilityState === "visible") void refresh(true); };
@@ -104,6 +159,14 @@ export default function App() {
   const current = preferences.pinnedProvider
     ? snapshots.find((item) => item.provider === preferences.pinnedProvider) ?? snapshots[0]
     : snapshots[activeIndex % Math.max(1, snapshots.length)];
+  const displayed = (() => {
+    if (!current || palettePercent === null) return current;
+    const primary = getPrimaryQuota(current);
+    if (primary?.kind === "short") return { ...current, shortWindow: { ...primary.window, remainingPercent: palettePercent } };
+    if (primary?.kind === "weekly") return { ...current, weeklyWindow: { ...primary.window, remainingPercent: palettePercent } };
+    return current;
+  })();
+  const activePaletteColors = paletteDraft ?? preferences.paletteColors;
 
   const savePreferences = useCallback((next: WidgetPreferences) => {
     const previous = preferences;
@@ -113,21 +176,41 @@ export default function App() {
   }, [preferences]);
 
   const handleHover = useCallback((value: boolean) => {
+    hoveredRef.current = value;
     setHovered(value);
+    if (!value && paletteActive.current) return;
     setCompact(!value);
     if (value) void refresh(true);
     void setWidgetExpanded(value).catch(() => setOperationError(value ? "Widget expand failed." : "Widget collapse failed."));
   }, [refresh]);
 
-  if (!current) return <div className="loading-card" aria-label={t.loadingQuota}><span /><span /><span /></div>;
+  const handlePalettePreview = useCallback(() => {
+    if (paletteActive.current) {
+      void closePalettePreview();
+      return;
+    }
+    const primary = current ? getPrimaryQuota(current) : null;
+    const initial = primary ? clampPercent(primary.window.remainingPercent) : 100;
+    paletteActive.current = true;
+    setPalettePercent(initial);
+    setCompact(false);
+    void setWidgetExpanded(true);
+    void openPalettePreview(initial).catch(() => {
+      paletteActive.current = false;
+      setPalettePercent(null);
+      setOperationError("Unable to open color preview.");
+    });
+  }, [current]);
+
+  if (!displayed) return <div className="loading-card" aria-label={t.loadingQuota}><span /><span /><span /></div>;
 
   if (compact) {
-    return <QuotaOrb snapshot={current} language={language} onDrag={() => startDragging()} onHover={handleHover} />;
+    return <QuotaOrb snapshot={displayed} language={language} paletteColors={activePaletteColors} onDrag={() => startDragging()} onHover={handleHover} />;
   }
 
   return (
     <QuotaCard
-      snapshot={current}
+      snapshot={displayed}
       preferences={preferences}
       providerCount={snapshots.length}
       onPrevious={() => setActiveIndex((value) => (value - 1 + snapshots.length) % snapshots.length)}
@@ -140,6 +223,11 @@ export default function App() {
       onRefresh={() => refresh(true)}
       isConsuming={consumingProviders.has(current.provider)}
       notice={operationError}
+      palettePreviewActive={palettePercent !== null}
+      onPalettePreview={handlePalettePreview}
+      tokenUsage={tokenUsage}
+      tokenUsageStatus={tokenUsageStatus}
+      paletteColors={activePaletteColors}
     />
   );
 }

@@ -1,6 +1,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import type { ProviderSnapshot, WidgetPreferences } from "../types";
 import { QuotaCard, QuotaOrb } from "./QuotaCard";
+import { DEFAULT_PALETTE_COLORS } from "../lib/quotaTheme";
 
 const preview: ProviderSnapshot = {
   provider: "codex",
@@ -14,7 +15,7 @@ const preview: ProviderSnapshot = {
   status: "ok",
   message: null,
 };
-const preferences: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: "codex", autoRotateSeconds: 12, language: "en" };
+const preferences: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: "codex", autoRotateSeconds: 12, language: "en", paletteColors: [...DEFAULT_PALETTE_COLORS] };
 
 interface Values {
   radius: number;
@@ -27,7 +28,7 @@ interface Values {
   warm: string;
 }
 
-type PreviewMode = 74 | 35 | 8 | "unavailable" | "stale" | "signed_out" | "orb";
+type PreviewMode = number | "unavailable" | "stale" | "signed_out" | "orb";
 
 const previewModes: Array<{ value: PreviewMode; label: string }> = [
   { value: 74, label: "74% Healthy" },
@@ -42,7 +43,10 @@ const previewModes: Array<{ value: PreviewMode; label: string }> = [
 const defaults: Values = { radius: 38, numberSize: 64, progressHeight: 6, brightness: 100, motion: 18, cool: "#7188bd", glow: "#fff4c3", warm: "#ff7653" };
 
 function initialPreviewMode(): PreviewMode {
-  const mode = new URLSearchParams(window.location.search).get("mode");
+  const params = new URLSearchParams(window.location.search);
+  const percent = Number(params.get("percent"));
+  if (params.has("percent") && Number.isFinite(percent)) return Math.min(100, Math.max(0, Math.round(percent)));
+  const mode = params.get("mode");
   if (mode === "healthy") return 74;
   if (mode === "caution") return 35;
   if (mode === "critical") return 8;
@@ -130,7 +134,7 @@ export function DesignPlayground() {
       </section>
       <aside className="design-controls">
         <div>
-          <p className="design-kicker">QUOTA FLOAT</p>
+          <p className="design-kicker">QUOTA BEACON</p>
           <h1>Visual Tuning</h1>
           <p className="design-description">Preview changes live, then apply the chosen values to the desktop widget.</p>
         </div>

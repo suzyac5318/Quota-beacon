@@ -2,12 +2,12 @@
 
 ## 当前发布目标
 
-Quota Float 使用同一套 React/CSS/Tauri 代码构建 Windows 和 macOS 版本。视觉效果、悬浮球、展开卡片、透明度、圆角和动画参数都应保持在共享前端代码中，避免维护 Windows/macOS 两套 UI。
+Quota Beacon 使用同一套 React/CSS/Tauri 代码构建 Windows 和 macOS 版本。视觉效果、悬浮球、展开卡片、透明度、圆角和动画参数都应保持在共享前端代码中，避免维护 Windows/macOS 两套 UI。
 
 当前发布默认输出 unsigned 包：
 
-- `quota-float-windows-unsigned.zip`
-- `quota-float-macos-universal-unsigned.zip`
+- `quota-beacon-windows-unsigned.zip`
+- `quota-beacon-macos-universal-unsigned.zip`
 
 macOS 包使用 Universal 构建，同时支持 Apple Silicon 和 Intel Mac。
 
@@ -16,8 +16,8 @@ macOS 包使用 Universal 构建，同时支持 Apple Silicon 和 Intel Mac。
 推送 `v*` tag 会触发 `.github/workflows/release.yml`，构建 Windows unsigned 包和 macOS Universal unsigned 包，并上传到草稿 GitHub Release。
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
 工作流完成后，到 GitHub Releases 检查草稿发布，确认说明和附件后手动发布。

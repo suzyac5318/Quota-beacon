@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Quota Float",
-  "version": "0.1.3",
-  "identifier": "app.quotafloat.desktop",
+  "productName": "Quota Beacon",
+  "version": "1.0.0",
+  "identifier": "app.quotabeacon.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "widget",
-        "title": "Quota Float",
+        "title": "Quota Beacon",
         "width": 100,
         "height": 100,
         "minWidth": 80,
@@ -27,6 +27,34 @@
         "skipTaskbar": true,
         "shadow": false,
         "visible": true
+      },
+      {
+        "label": "palette",
+        "title": "Quota Beacon Palette Preview",
+        "url": "index.html?palette",
+        "width": 320,
+        "height": 104,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "visible": false
+      },
+      {
+        "label": "palette-editor",
+        "title": "Quota Beacon Palette Editor",
+        "url": "index.html?palette-editor",
+        "width": 320,
+        "height": 104,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "visible": false
       }
     ],
     "security": { "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:" }
@@ -35,9 +63,9 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
-    "shortDescription": "Codex quota at a glance",
-    "longDescription": "A lightweight floating desktop card for Codex usage limits.",
-    "copyright": "Copyright Quota Float contributors",
+    "shortDescription": "Codex usage limits at a glance",
+    "longDescription": "A local-first floating desktop card for monitoring Codex usage limits.",
+    "copyright": "Copyright 2026 Quota Beacon contributors",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
   }
 }

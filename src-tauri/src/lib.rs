@@ -1,15 +1,17 @@
 mod codex;
+mod codex_overlay;
 mod models;
+mod token_usage;
 
 use std::{
     fs,
     io::Write,
     path::PathBuf,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
-use models::{ProviderSnapshot, WidgetPreferences};
+use models::{ProviderSnapshot, TokenUsageSummary, WidgetPreferences};
 use tauri::{
     menu::{CheckMenuItem, Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -24,6 +26,7 @@ struct AppState {
     preferences_path: PathBuf,
     fetch_lock: tokio::sync::Mutex<()>,
     snapshot_cache: Mutex<Option<(Instant, Vec<ProviderSnapshot>)>>,
+    token_usage_cache: Arc<Mutex<token_usage::TokenUsageCache>>,
 }
 
 async fn fetch_snapshots_uncached(state: &State<'_, AppState>) -> Vec<ProviderSnapshot> {
@@ -120,6 +123,14 @@ async fn refresh_snapshots(state: State<'_, AppState>) -> Result<Vec<ProviderSna
 }
 
 #[tauri::command]
+async fn get_token_usage(state: State<'_, AppState>) -> Result<TokenUsageSummary, String> {
+    let cache = Arc::clone(&state.token_usage_cache);
+    tauri::async_runtime::spawn_blocking(move || token_usage::scan(&cache))
+        .await
+        .map_err(|error| format!("Token usage scan failed: {error}"))?
+}
+
+#[tauri::command]
 fn get_preferences(state: State<'_, AppState>) -> Result<WidgetPreferences, String> {
     state
         .preferences
@@ -149,6 +160,158 @@ fn apply_lock(app: &AppHandle, locked: bool) -> Result<(), String> {
     window
         .set_ignore_cursor_events(locked)
         .map_err(|_| "failed to toggle click-through".to_string())
+}
+
+fn position_palette_windows(app: &AppHandle) -> Result<(), String> {
+    let widget = app
+        .get_webview_window("widget")
+        .ok_or_else(|| "widget window missing".to_string())?;
+    let palette = app
+        .get_webview_window("palette")
+        .ok_or_else(|| "palette window missing".to_string())?;
+    let editor = app
+        .get_webview_window("palette-editor")
+        .ok_or_else(|| "palette editor window missing".to_string())?;
+    if !palette.is_visible().unwrap_or(false) || !editor.is_visible().unwrap_or(false) {
+        return Ok(());
+    }
+
+    let widget_position = widget.outer_position().map_err(|error| error.to_string())?;
+    let widget_size = widget.outer_size().map_err(|error| error.to_string())?;
+    let palette_size = palette.outer_size().map_err(|error| error.to_string())?;
+    let editor_size = editor.outer_size().map_err(|error| error.to_string())?;
+    let scale = widget.scale_factor().unwrap_or(1.0);
+    let gap = (8.0 * scale).round() as i32;
+    let below = widget_position.y + widget_size.height as i32 + gap;
+    let group_height = palette_size.height as i32 + gap + editor_size.height as i32;
+    let work_area = widget
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| *monitor.work_area());
+    let monitor_top = work_area.map(|area| area.position.y).unwrap_or(i32::MIN);
+    let monitor_bottom = work_area
+        .map(|area| area.position.y + area.size.height as i32)
+        .unwrap_or(i32::MAX);
+    let palette_y = if below + group_height <= monitor_bottom {
+        below
+    } else {
+        (widget_position.y - group_height - gap).max(monitor_top)
+    };
+    palette
+        .set_position(tauri::PhysicalPosition::new(widget_position.x, palette_y))
+        .map_err(|error| format!("failed to position palette window: {error}"))?;
+    editor
+        .set_position(tauri::PhysicalPosition::new(
+            widget_position.x,
+            palette_y + palette_size.height as i32 + gap,
+        ))
+        .map_err(|error| format!("failed to position palette editor window: {error}"))
+}
+
+#[tauri::command]
+fn open_palette_preview(
+    percent: u8,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let palette = app
+        .get_webview_window("palette")
+        .ok_or_else(|| "palette window missing".to_string())?;
+    palette
+        .show()
+        .map_err(|error| format!("failed to show palette window: {error}"))?;
+    let editor = app
+        .get_webview_window("palette-editor")
+        .ok_or_else(|| "palette editor window missing".to_string())?;
+    editor
+        .show()
+        .map_err(|error| format!("failed to show palette editor window: {error}"))?;
+    if let Some(widget) = app.get_webview_window("widget") {
+        let _ = widget.set_always_on_top(true);
+    }
+    let _ = palette.set_always_on_top(true);
+    let _ = editor.set_always_on_top(true);
+    position_palette_windows(&app)?;
+    let colors = state
+        .preferences
+        .lock()
+        .map_err(|_| "settings unavailable".to_string())?
+        .palette_colors
+        .clone();
+    let payload = serde_json::json!({ "percent": percent.min(100), "colors": colors });
+    app.emit_to("palette", "palette-preview-opened", payload.clone())
+        .map_err(|error| format!("failed to initialize palette preview: {error}"))?;
+    app.emit_to("palette-editor", "palette-preview-opened", payload)
+        .map_err(|error| format!("failed to initialize palette editor: {error}"))?;
+    let _ = palette.set_focus();
+    Ok(())
+}
+
+fn finish_palette_preview(app: &AppHandle) {
+    if let Some(palette) = app.get_webview_window("palette") {
+        let _ = palette.hide();
+    }
+    if let Some(editor) = app.get_webview_window("palette-editor") {
+        let _ = editor.hide();
+    }
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(preferences) = state.preferences.lock() {
+            if let Some(widget) = app.get_webview_window("widget") {
+                let _ = widget.set_always_on_top(preferences.always_on_top);
+            }
+        }
+    }
+    let _ = app.emit_to("widget", "palette-preview-closed", ());
+}
+
+#[tauri::command]
+fn update_palette_preview(percent: u8, app: AppHandle) -> Result<(), String> {
+    app.emit_to("widget", "palette-preview-changed", percent.min(100))
+        .map_err(|error| format!("failed to update palette preview: {error}"))
+}
+
+#[tauri::command]
+fn update_palette_colors(colors: Vec<String>, app: AppHandle) -> Result<(), String> {
+    if !models::valid_palette_colors(&colors) {
+        return Err("invalid palette colors".to_string());
+    }
+    app.emit_to("widget", "palette-colors-changed", colors.clone())
+        .map_err(|error| format!("failed to update widget colors: {error}"))?;
+    app.emit_to("palette", "palette-colors-changed", colors)
+        .map_err(|error| format!("failed to update palette colors: {error}"))
+}
+
+#[tauri::command]
+fn save_palette_colors(
+    colors: Vec<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<WidgetPreferences, String> {
+    if !models::valid_palette_colors(&colors) {
+        return Err("invalid palette colors".to_string());
+    }
+    let mut preferences = state
+        .preferences
+        .lock()
+        .map_err(|_| "settings unavailable".to_string())?
+        .clone();
+    preferences.palette_colors = colors;
+    preferences = preferences.normalized();
+    persist_preferences(&state.preferences_path, &preferences)?;
+    *state
+        .preferences
+        .lock()
+        .map_err(|_| "settings unavailable".to_string())? = preferences.clone();
+    app.emit_to("widget", "preferences-changed", preferences.clone())
+        .map_err(|error| format!("failed to publish palette settings: {error}"))?;
+    Ok(preferences)
+}
+
+#[tauri::command]
+fn close_palette_preview(app: AppHandle) -> Result<(), String> {
+    finish_palette_preview(&app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -224,7 +387,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&show, &refresh, &unlock, &pin, &language, &autostart, &quit])?;
     let mut builder = TrayIconBuilder::with_id("main")
         .menu(&menu)
-        .tooltip("Quota Float");
+        .tooltip("Quota Beacon");
     if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
@@ -235,6 +398,7 @@ fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
                 if let Some(window) = app.get_webview_window("widget") {
                     if window.is_visible().unwrap_or(false) {
                         let _ = window.hide();
+                        finish_palette_preview(app);
                     } else {
                         let _ = window.show();
                         let _ = window.set_focus();
@@ -316,7 +480,7 @@ pub fn run() {
             MacosLauncher::LaunchAgent,
             None,
         ))
-        .plugin(WindowStateBuilder::default().build())
+        .plugin(WindowStateBuilder::default().with_denylist(&["palette", "palette-editor"]).build())
         .setup(|app| {
             let data_dir = app.path().app_config_dir()?;
             let preferences_path = data_dir.join("preferences.json");
@@ -327,13 +491,16 @@ pub fn run() {
                 .user_agent("QuotaFloat/0.1")
                 .build()
                 .expect("static HTTP client configuration must be valid");
+            let token_usage_cache = Arc::new(Mutex::new(token_usage::TokenUsageCache::default()));
             app.manage(AppState {
                 client,
                 preferences: Mutex::new(preferences.clone()),
                 preferences_path,
                 fetch_lock: tokio::sync::Mutex::new(()),
                 snapshot_cache: Mutex::new(None),
+                token_usage_cache: Arc::clone(&token_usage_cache),
             });
+            codex_overlay::start(app.handle().clone(), token_usage_cache);
             if setup_tray(app).is_err() {
                 eprintln!("tray setup failed; enabling taskbar fallback");
                 if let Some(window) = app.get_webview_window("widget") {
@@ -351,10 +518,16 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_snapshots,
             refresh_snapshots,
+            get_token_usage,
             get_preferences,
             set_preferences,
             set_widget_locked,
-            set_widget_always_on_top
+            set_widget_always_on_top,
+            open_palette_preview,
+            update_palette_preview,
+            update_palette_colors,
+            save_palette_colors,
+            close_palette_preview
         ])
         .on_tray_icon_event(|app, event| {
             if let TrayIconEvent::Click {
@@ -370,13 +543,21 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
+            if window.label() == "widget" && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+                let _ = position_palette_windows(window.app_handle());
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
+                if window.label() == "palette" || window.label() == "palette-editor" {
+                    finish_palette_preview(window.app_handle());
+                } else if window.label() == "widget" {
+                    finish_palette_preview(window.app_handle());
+                }
             }
         })
         .build(tauri::generate_context!())
-        .expect("failed to build Quota Float");
+        .expect("failed to build Quota Beacon");
     app.run(|app_handle, event| {
         if matches!(event, tauri::RunEvent::Resumed) {
             let _ = app_handle.emit_to("widget", "refresh-requested", ());

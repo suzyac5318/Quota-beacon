@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampPercent, formatResetDate, formatResetTime, needsFastRefresh, quotaTier } from "./format";
+import { clampPercent, formatCompactTokens, formatResetDate, formatResetTime, getPrimaryQuota, needsFastRefresh, quotaTier } from "./format";
 
 describe("quota formatting", () => {
   it("clamps untrusted percentages", () => {
@@ -8,12 +8,30 @@ describe("quota formatting", () => {
     expect(clampPercent(140)).toBe(100);
   });
 
+  it("formats cumulative token totals with stable compact units", () => {
+    expect(formatCompactTokens(0)).toBe("0");
+    expect(formatCompactTokens(999)).toBe("999");
+    expect(formatCompactTokens(1_250)).toBe("1.3K");
+    expect(formatCompactTokens(999_999)).toBe("1M");
+    expect(formatCompactTokens(12_458_320)).toBe("12.5M");
+  });
+
   it("uses inclusive 50% and 10% quota boundaries", () => {
     expect(quotaTier(50)).toBe("healthy");
     expect(quotaTier(49)).toBe("caution");
     expect(quotaTier(10)).toBe("caution");
     expect(quotaTier(9)).toBe("critical");
     expect(quotaTier(null)).toBe("unknown");
+  });
+
+  it("prefers the short window and falls back to the weekly window", () => {
+    const base = { provider: "codex", displayName: "CODEX", plan: "PLUS", resetCredits: 0, updatedAt: "2026-07-13T00:00:00Z", status: "ok", message: null } as const;
+    const shortWindow = { remainingPercent: 75, resetsAt: null, windowSeconds: 18_000 };
+    const weeklyWindow = { remainingPercent: 99, resetsAt: null, windowSeconds: 604_800 };
+
+    expect(getPrimaryQuota({ ...base, shortWindow, weeklyWindow })).toEqual({ kind: "short", window: shortWindow });
+    expect(getPrimaryQuota({ ...base, shortWindow: null, weeklyWindow })).toEqual({ kind: "weekly", window: weeklyWindow });
+    expect(getPrimaryQuota({ ...base, shortWindow: null, weeklyWindow: null })).toBeNull();
   });
 
   it("formats reset time in Chinese by default and supports English", () => {

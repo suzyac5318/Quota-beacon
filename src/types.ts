@@ -21,10 +21,23 @@ export interface ProviderSnapshot {
   message: string | null;
 }
 
+export interface TokenUsageSummary {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+  sessionCount: number;
+  updatedAt: string;
+}
+
+export type TokenUsageStatus = "loading" | "ready" | "unavailable";
+
 export interface WidgetPreferences {
   locked: boolean;
   alwaysOnTop: boolean;
   pinnedProvider: ProviderId | null;
   autoRotateSeconds: number;
   language: Language;
+  paletteColors: string[];
 }

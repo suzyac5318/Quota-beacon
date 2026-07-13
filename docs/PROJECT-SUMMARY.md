@@ -1,8 +1,8 @@
-# Quota Float 项目简介
+# Quota Beacon 项目简介
 
 ## 一句话定位
 
-Quota Float 是一个 Tauri 2 桌面悬浮窗，用本机 Codex Desktop 登录态只读查询 Codex 额度，并以小卡片展示 5 小时额度、每周额度、重置时间、重置机会和会员类型。
+Quota Beacon 是一个独立维护的 Tauri 2 桌面悬浮窗，用本机 Codex Desktop 登录态只读查询 Codex 额度，并以小卡片展示 5 小时额度、每周额度、重置时间、本机 Token 汇总和可定制的颜色主题。
 
 ## 当前技术栈
 

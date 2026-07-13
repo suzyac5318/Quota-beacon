@@ -1,117 +1,47 @@
-# Quota Float
+# Quota Beacon
 
-Lightweight floating desktop widget for checking Codex quota from the local Codex Desktop login state.
+Quota Beacon 是一款独立维护、local-first 的 Tauri 桌面悬浮工具。它在本机读取已有 Codex Desktop 登录状态，以清晰的悬浮卡片展示真实额度、重置时间、本机 Token 汇总和可定制的额度主题。
 
-![Quota Float quota states](docs/images/quota-states.png)
+> 当前版本：`1.0.0`（开发中）
 
-## Highlights
+## 主要功能
 
-- Shows your Codex plan, 5-hour quota, weekly quota, and next reset time in a compact always-on-top widget.
-- Uses clear quota states for healthy, caution, and critical remaining usage.
-- Collapses into a small floating orb when idle, then expands on hover.
-- Indicates whether quota is currently being consumed.
-- Includes quick controls for language switching and always-on-top behavior.
-- Shows reset credit count and available reset-credit expiration times when the quota service provides them.
-- Handles stale data, signed-out sessions, unavailable quota responses, and loading states without fabricating values.
+- 展示 5 小时额度、周额度与下一次重置时间；不根据本地数据猜测额度。
+- 空闲时折叠为悬浮球，悬停后展开；支持拖动、置顶、托盘控制和锁定。
+- 每 10 秒刷新真实额度；异常时显示不可用或旧数据状态，而不是伪造数值。
+- 提供 101 级连续颜色主题、色彩预览、调色盘编辑和可访问的键盘交互。
+- 汇总本机 Codex 会话 Token 使用量，并在已打开的 Codex 窗口中显示当前对话 Token 浮层。
+- 不包含遥测、分析或第三方追踪。
 
-## Screenshots
+## 工作方式与隐私边界
 
-| Quota states | Floating orb | Reset credit expiration |
-| --- | --- | --- |
-| ![Healthy, caution, and critical quota states](docs/images/quota-states.png) | ![Collapsed quota orb](docs/images/quota-orb.png) | ![Reset credit expiration popover](docs/images/quota-reset-expiration.png) |
+Quota Beacon 只使用本机既有的 Codex Desktop 登录状态，向相应额度服务发起只读查询。它不会兑换重置机会、修改账户设置，也不会持久化 token、账号 ID、提示词、聊天内容、原始额度响应或本机认证路径。
 
-## Repository Metadata
+浏览器预览使用 mock 数据；真实额度读取仅能在同一台已登录 Codex Desktop 的 Tauri 桌面环境验证。详细说明见 [PRIVACY.md](PRIVACY.md) 与 [SECURITY.md](SECURITY.md)。
 
-Suggested repository description:
+## 开发
 
-```text
-Floating Windows/macOS desktop widget for checking Codex quota from the local Codex Desktop login state.
-```
-
-Suggested topics:
-
-```text
-codex, quota, tauri, react, rust, desktop-app, windows, macos, productivity
-```
-
-## How It Works
-
-Quota Float reads the existing Codex Desktop login state on your machine and queries Codex/ChatGPT quota endpoints with that session. It does not estimate usage from local token counts and does not redeem reset credits or modify account settings.
-
-Browser preview uses mock data. Real quota reading requires the Tauri desktop app and an existing Codex Desktop login on the same machine.
-
-## Download
-
-For normal users, download the latest unsigned build from GitHub Releases:
-
-- Latest release: https://github.com/change-42-yhmm/quota-float/releases/latest
-- Windows: `quota-float-windows-unsigned.zip`
-- macOS Universal: `quota-float-macos-universal-unsigned.zip`
-
-Unzip it and run the app. Unsigned builds may trigger Windows SmartScreen or macOS Gatekeeper warnings. Public distribution to non-technical users should use signed Windows builds and notarized macOS builds.
-
-## Feedback
-
-Please use GitHub Issues for bugs, compatibility reports, and feature requests:
-
-https://github.com/change-42-yhmm/quota-float/issues
-
-## Privacy Boundary
-
-Quota Float is local-first and intentionally narrow:
-
-- Reads the local Codex Desktop login state only to query Codex quota.
-- Sends the existing Codex access token only to ChatGPT quota endpoints.
-- Stores only widget preferences in its own app config directory.
-- Does not store Codex tokens, account IDs, prompts, chat history, raw quota responses, or local auth paths.
-- Does not include telemetry, analytics, crash reporting, or third-party tracking.
-- Does not redeem reset credits or modify account settings.
-
-See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md) for the full boundary.
-
-## Accuracy Boundary
-
-Codex quota is read from Codex/ChatGPT quota service responses. If the response format changes, the app shows an unavailable or stale state instead of inventing quota values.
-
-## Development
-
-Requirements:
-
-- Node.js 20+
-- Rust stable
-- Tauri 2 system dependencies for your platform
+前置条件：Node.js 20+、Rust stable，以及目标平台所需的 Tauri 2 系统依赖。
 
 ```bash
 npm install
-npm run dev
 npm run test
 npm run build
 npm run tauri dev
 ```
 
-## Build
+## 构建与发布
 
 ```bash
 npm run tauri build
 ```
 
-On Windows, Tauri may download WiX to create an MSI installer. If WiX download fails, the release executable may still be produced at:
+GitHub Actions 会在 push/PR 时执行测试和构建；推送 `v*` 标签时会生成 Windows 与 macOS 的 unsigned 发布包。仓库地址创建后，再在 [docs/GITHUB-RELEASE-CHECKLIST.md](docs/GITHUB-RELEASE-CHECKLIST.md) 中完成连接与首次发布。
 
-```text
-src-tauri/target/release/quota-float.exe
-```
+不要提交本机凭据、`.codex`、`.env*`、个人截图、`node_modules`、构建输出或安装包。
 
-## Release
+## 衍生项目与许可证
 
-GitHub Actions are configured for:
+Quota Beacon 是基于上游开源项目衍生并独立维护的项目。上游来源、当前贡献边界与许可要求见 [UPSTREAM-NOTICE.md](UPSTREAM-NOTICE.md)。
 
-- CI on push/PR: frontend tests, Rust tests, web build, Tauri build.
-- `v*` tags: unsigned Windows and macOS Universal bundle artifacts and a public GitHub Release.
-
-See [docs/GITHUB-RELEASE-CHECKLIST.md](docs/GITHUB-RELEASE-CHECKLIST.md) before publishing a version for others.
-
-Do not upload local credentials, `.codex`, `.env*`, screenshots with personal data, `node_modules`, `dist`, `src-tauri/target`, or local installers to source control.
-
-## License
-
-MIT
+本项目保留 MIT License，详见 [LICENSE](LICENSE)。
