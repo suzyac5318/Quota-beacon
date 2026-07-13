@@ -118,6 +118,7 @@ button { font: inherit; }
 .quota-card--compact .expanded-content { pointer-events: none; }
 .card-header { min-height: 48px; display: flex; align-items: flex-start; justify-content: space-between; cursor: move; }
 .quota-reveal, .expanded-primary { opacity: 1; filter: blur(0); transform: translateY(0); transition: opacity 180ms ease, transform 180ms ease, filter 180ms ease; will-change: opacity, transform, filter; }
+.expanded-primary { transition-duration: 150ms; }
 .quota-card:not(.quota-card--compact) .expanded-primary { transition-delay: 130ms; }
 .quota-card:not(.quota-card--compact) .quota-reveal--0 { transition-delay: 180ms; }
 .quota-card:not(.quota-card--compact) .quota-reveal--1 { transition-delay: 210ms; }
