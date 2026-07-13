@@ -147,11 +147,19 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     let cleanup: () => void = () => {};
-    void listenDesktopEvents({ onPreferences: (value) => { setPreferences({ ...DEFAULT_PREFS, ...value, language: normalizeLanguage(value.language), paletteColors: normalizePaletteColors(value.paletteColors) }); setOperationError(null); }, onRefresh: () => void refresh(true) }).then((value) => {
+    void listenDesktopEvents({
+      onPreferences: (value) => { setPreferences({ ...DEFAULT_PREFS, ...value, language: normalizeLanguage(value.language), paletteColors: normalizePaletteColors(value.paletteColors) }); setOperationError(null); },
+      onRefresh: () => void refresh(true),
+      onFocusLost: () => {
+        hoveredRef.current = false;
+        setHovered(false);
+        scheduleCollapse(false);
+      },
+    }).then((value) => {
       if (cancelled) value(); else cleanup = value;
     }).catch(() => setOperationError("Desktop event listener failed to start."));
     return () => { cancelled = true; cleanup(); };
-  }, [refresh]);
+  }, [refresh, scheduleCollapse]);
 
   useEffect(() => {
     const id = window.setInterval(() => void refresh(true), REFRESH_INTERVAL_MS);

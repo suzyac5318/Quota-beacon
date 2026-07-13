@@ -129,22 +129,26 @@ export async function listenPaletteController(handlers: {
   onOpened: (payload: PaletteSessionPayload) => void;
   onClosing: () => void;
   onColorsChanged: (colors: string[]) => void;
+  onPercentChanged?: (percent: number) => void;
 }): Promise<() => void> {
   if (!isTauri()) return () => undefined;
   const { listen } = await import("@tauri-apps/api/event");
   const unlistenOpened = await listen<PaletteSessionPayload>("palette-preview-opened", (event) => handlers.onOpened(event.payload));
   const unlistenClosing = await listen("palette-preview-closing", handlers.onClosing);
   const unlistenColors = await listen<string[]>("palette-colors-changed", (event) => handlers.onColorsChanged(event.payload));
-  return () => { unlistenOpened(); unlistenClosing(); unlistenColors(); };
+  const unlistenPercent = await listen<number>("palette-preview-changed", (event) => handlers.onPercentChanged?.(event.payload));
+  return () => { unlistenOpened(); unlistenClosing(); unlistenColors(); unlistenPercent(); };
 }
 
 export async function listenDesktopEvents(handlers: {
   onPreferences: (value: WidgetPreferences) => void;
   onRefresh: () => void;
+  onFocusLost: () => void;
 }): Promise<() => void> {
   if (!isTauri()) return () => undefined;
   const { listen } = await import("@tauri-apps/api/event");
   const unlistenPreferences = await listen<WidgetPreferences>("preferences-changed", (event) => handlers.onPreferences(event.payload));
   const unlistenRefresh = await listen("refresh-requested", handlers.onRefresh);
-  return () => { unlistenPreferences(); unlistenRefresh(); };
+  const unlistenFocusLost = await listen("widget-focus-lost", handlers.onFocusLost);
+  return () => { unlistenPreferences(); unlistenRefresh(); unlistenFocusLost(); };
 }

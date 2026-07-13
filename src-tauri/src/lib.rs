@@ -275,8 +275,11 @@ fn finish_palette_preview(app: &AppHandle) {
 
 #[tauri::command]
 fn update_palette_preview(percent: u8, app: AppHandle) -> Result<(), String> {
-    app.emit_to("widget", "palette-preview-changed", percent.min(100))
-        .map_err(|error| format!("failed to update palette preview: {error}"))
+    let percent = percent.min(100);
+    app.emit_to("widget", "palette-preview-changed", percent)
+        .map_err(|error| format!("failed to update palette preview: {error}"))?;
+    app.emit_to("palette-editor", "palette-preview-changed", percent)
+        .map_err(|error| format!("failed to update palette editor: {error}"))
 }
 
 #[tauri::command]
@@ -566,6 +569,24 @@ pub fn run() {
         .on_window_event(|window, event| {
             if window.label() == "widget" && matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
                 let _ = position_palette_windows(window.app_handle());
+            }
+            if window.label() == "widget" && matches!(event, WindowEvent::Focused(false)) {
+                let app = window.app_handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                    let controls_visible = ["palette", "palette-editor"].iter().any(|label| {
+                        app.get_webview_window(label)
+                            .and_then(|window| window.is_visible().ok())
+                            .unwrap_or(false)
+                    });
+                    let widget_focused = app
+                        .get_webview_window("widget")
+                        .and_then(|window| window.is_focused().ok())
+                        .unwrap_or(false);
+                    if !controls_visible && !widget_focused {
+                        let _ = app.emit_to("widget", "widget-focus-lost", ());
+                    }
+                });
             }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
