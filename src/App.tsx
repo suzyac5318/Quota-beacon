@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { QuotaCard, QuotaOrb } from "./components/QuotaCard";
+import { QuotaCard } from "./components/QuotaCard";
 import { closePalettePreview, fetchSnapshots, fetchTokenUsage, getPreferences, listenDesktopEvents, listenPalettePreview, openPalettePreview, setAlwaysOnTop, setWidgetExpanded, startDragging, updatePreferences } from "./lib/bridge";
 import { clampPercent, getPrimaryQuota } from "./lib/format";
 import { copy, nextLanguage, normalizeLanguage } from "./lib/i18n";
@@ -10,6 +10,9 @@ import type { ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPrefe
 const DEFAULT_PREFS: WidgetPreferences = { locked: false, alwaysOnTop: true, pinnedProvider: null, autoRotateSeconds: 12, language: "zh-CN", paletteColors: [...DEFAULT_PALETTE_COLORS] };
 const REFRESH_INTERVAL_MS = 10_000;
 const TOKEN_USAGE_REFRESH_INTERVAL_MS = 60_000;
+const HOVER_LIFT_MS = 36;
+const COLLAPSE_DELAY_MS = 120;
+const COLLAPSE_MORPH_MS = 280;
 
 export default function App() {
   const [snapshots, setSnapshots] = useState<ProviderSnapshot[]>([]);
@@ -27,9 +30,36 @@ export default function App() {
   const previousPrimary = useRef(new Map<string, number>());
   const consumptionTimers = useRef(new Map<string, number>());
   const paletteActive = useRef(false);
+  const paletteOpening = useRef(false);
+  const paletteClosing = useRef(false);
   const hoveredRef = useRef(false);
+  const hoverExpandTimer = useRef<number | null>(null);
+  const collapseDelayTimer = useRef<number | null>(null);
+  const collapseResizeTimer = useRef<number | null>(null);
   const language = normalizeLanguage(preferences.language);
   const t = copy[language];
+
+  const clearWidgetMotionTimers = useCallback(() => {
+    for (const timer of [hoverExpandTimer, collapseDelayTimer, collapseResizeTimer]) {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, []);
+
+  const scheduleCollapse = useCallback((withHoverDelay = true) => {
+    if (paletteActive.current) return;
+    if (collapseDelayTimer.current !== null) window.clearTimeout(collapseDelayTimer.current);
+    collapseDelayTimer.current = window.setTimeout(() => {
+      collapseDelayTimer.current = null;
+      if (hoveredRef.current || paletteActive.current) return;
+      setCompact(true);
+      collapseResizeTimer.current = window.setTimeout(() => {
+        collapseResizeTimer.current = null;
+        if (hoveredRef.current || paletteActive.current) return;
+        void setWidgetExpanded(false).catch(() => setOperationError("Widget collapse failed."));
+      }, COLLAPSE_MORPH_MS);
+    }, withHoverDelay ? COLLAPSE_DELAY_MS : 0);
+  }, []);
 
   const refresh = useCallback(async (force = false) => {
     try {
@@ -102,23 +132,17 @@ export default function App() {
       onColorsChanged: (colors) => setPaletteDraft(normalizePaletteColors(colors)),
       onClosed: () => {
         paletteActive.current = false;
+        paletteOpening.current = false;
+        paletteClosing.current = false;
         setPalettePercent(null);
         setPaletteDraft(null);
-        if (!hoveredRef.current) {
-          setCompact(true);
-          void setWidgetExpanded(false);
-        }
+        if (!hoveredRef.current) scheduleCollapse(false);
       },
     }).then((unlisten) => { if (cancelled) unlisten(); else cleanup = unlisten; });
     return () => { cancelled = true; cleanup(); };
-  }, []);
+  }, [scheduleCollapse]);
 
-  useEffect(() => {
-    const updateCompact = () => setCompact(window.innerWidth <= 120 || window.innerHeight <= 120);
-    updateCompact();
-    window.addEventListener("resize", updateCompact);
-    return () => window.removeEventListener("resize", updateCompact);
-  }, []);
+  useEffect(() => () => clearWidgetMotionTimers(), [clearWidgetMotionTimers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -178,35 +202,58 @@ export default function App() {
   const handleHover = useCallback((value: boolean) => {
     hoveredRef.current = value;
     setHovered(value);
-    if (!value && paletteActive.current) return;
-    setCompact(!value);
-    if (value) void refresh(true);
-    void setWidgetExpanded(value).catch(() => setOperationError(value ? "Widget expand failed." : "Widget collapse failed."));
-  }, [refresh]);
+    if (value) {
+      clearWidgetMotionTimers();
+      void setWidgetExpanded(true).catch(() => setOperationError("Widget expand failed."));
+      hoverExpandTimer.current = window.setTimeout(() => {
+        hoverExpandTimer.current = null;
+        if (hoveredRef.current || paletteActive.current) setCompact(false);
+      }, HOVER_LIFT_MS);
+      void refresh(true);
+      return;
+    }
+    if (hoverExpandTimer.current !== null) {
+      window.clearTimeout(hoverExpandTimer.current);
+      hoverExpandTimer.current = null;
+    }
+    scheduleCollapse(true);
+  }, [clearWidgetMotionTimers, refresh, scheduleCollapse]);
 
   const handlePalettePreview = useCallback(() => {
+    const requestClose = () => {
+      void closePalettePreview().catch(() => {
+        paletteClosing.current = false;
+        setOperationError("Unable to close color preview.");
+      });
+    };
     if (paletteActive.current) {
-      void closePalettePreview();
+      if (paletteClosing.current) return;
+      paletteClosing.current = true;
+      if (!paletteOpening.current) requestClose();
       return;
     }
     const primary = current ? getPrimaryQuota(current) : null;
     const initial = primary ? clampPercent(primary.window.remainingPercent) : 100;
     paletteActive.current = true;
+    paletteOpening.current = true;
+    paletteClosing.current = false;
+    clearWidgetMotionTimers();
     setPalettePercent(initial);
     setCompact(false);
     void setWidgetExpanded(true);
-    void openPalettePreview(initial).catch(() => {
+    void openPalettePreview(initial).then(() => {
+      paletteOpening.current = false;
+      if (paletteClosing.current) requestClose();
+    }).catch(() => {
       paletteActive.current = false;
+      paletteOpening.current = false;
+      paletteClosing.current = false;
       setPalettePercent(null);
       setOperationError("Unable to open color preview.");
     });
-  }, [current]);
+  }, [clearWidgetMotionTimers, current]);
 
   if (!displayed) return <div className="loading-card" aria-label={t.loadingQuota}><span /><span /><span /></div>;
-
-  if (compact) {
-    return <QuotaOrb snapshot={displayed} language={language} paletteColors={activePaletteColors} onDrag={() => startDragging()} onHover={handleHover} />;
-  }
 
   return (
     <QuotaCard
@@ -228,6 +275,8 @@ export default function App() {
       tokenUsage={tokenUsage}
       tokenUsageStatus={tokenUsageStatus}
       paletteColors={activePaletteColors}
+      compact={compact}
+      hovered={hovered}
     />
   );
 }

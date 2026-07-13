@@ -11,6 +11,7 @@ import {
 export function PaletteEditor() {
   const [colors, setColors] = useState<string[]>([...DEFAULT_PALETTE_COLORS]);
   const [message, setMessage] = useState("");
+  const [motionPhase, setMotionPhase] = useState<"closed" | "opening" | "open" | "closing">(() => "__TAURI_INTERNALS__" in window ? "closed" : "open");
   const validationError = paletteValidationError(colors);
 
   useEffect(() => {
@@ -20,7 +21,10 @@ export function PaletteEditor() {
       onOpened: (payload) => {
         setColors(normalizePaletteColors(payload.colors));
         setMessage("");
+        setMotionPhase("opening");
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => setMotionPhase("open")));
       },
+      onClosing: () => setMotionPhase("closing"),
       onColorsChanged: (nextColors) => setColors(normalizePaletteColors(nextColors)),
     }).then((unlisten) => {
       if (cancelled) unlisten(); else cleanup = unlisten;
@@ -54,7 +58,7 @@ export function PaletteEditor() {
   };
 
   return (
-    <main className="palette-editor" style={quotaThemeStyle(50, colors)}>
+    <main className={`palette-editor palette-editor--${motionPhase}`} style={quotaThemeStyle(50, colors)}>
       <div className="palette-editor__header">
         <p>调色盘</p>
         <div className="palette-editor__actions">

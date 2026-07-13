@@ -4,6 +4,7 @@ import { clampPercent, formatCompactTokens, formatDateTime, formatExactTokens, f
 import { copy, normalizeLanguage } from "../lib/i18n";
 import { quotaThemeStyle } from "../lib/quotaTheme";
 import type { Language, ProviderSnapshot, TokenUsageStatus, TokenUsageSummary, WidgetPreferences } from "../types";
+import { AnimatedNumber } from "./AnimatedNumber";
 import { ProviderMark } from "./ProviderMark";
 
 interface Props {
@@ -26,6 +27,8 @@ interface Props {
   tokenUsage?: TokenUsageSummary | null;
   tokenUsageStatus?: TokenUsageStatus;
   paletteColors?: readonly string[];
+  compact?: boolean;
+  hovered?: boolean;
 }
 
 function StatusIcon({ status, expired = false }: { status: ProviderSnapshot["status"]; expired?: boolean }) {
@@ -68,6 +71,8 @@ export const QuotaCard = memo(function QuotaCard({
   tokenUsage = null,
   tokenUsageStatus = "loading",
   paletteColors,
+  compact = false,
+  hovered = false,
 }: Props) {
   const [showCreditTip, setShowCreditTip] = useState(initialShowCreditTip);
   const language = normalizeLanguage(preferences.language);
@@ -105,7 +110,7 @@ export const QuotaCard = memo(function QuotaCard({
 
   return (
     <main
-      className={`quota-card quota-card--${snapshot.status}`}
+      className={`quota-card quota-card--${snapshot.status}${compact ? " quota-card--compact" : ""}${hovered ? " quota-card--hovered" : ""}`}
       style={primary === null ? undefined : quotaThemeStyle(primary, paletteColors)}
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
@@ -114,7 +119,7 @@ export const QuotaCard = memo(function QuotaCard({
       <div className="aurora" aria-hidden="true" />
       <span className="sr-only" aria-live="polite">{available && primary !== null ? primaryLabel : message}</span>
       {notice ? <p className="operation-notice" role="status">{notice}</p> : null}
-      <header className="card-header">
+      <header className="card-header quota-reveal quota-reveal--0">
         <div>
           <p className="eyebrow">{snapshot.displayName} · {snapshot.plan ?? t.accountFallback}</p>
           {snapshot.status !== "stale" ? <p className="updated">{weeklyOnly ? t.weeklyRemaining : t.shortRemaining}</p> : null}
@@ -136,19 +141,19 @@ export const QuotaCard = memo(function QuotaCard({
         <>
           <div className="metric-row">
             <section className="primary-metric" aria-label={primaryLabel}>
-              <span>{primary}</span><small>%</small>
+              <AnimatedNumber value={primary} /><small>%</small>
             </section>
-            <section className={`token-total token-total--${tokenUsageStatus}`} aria-label={tokenMetricLabel} title={tokenMetricLabel}>
+            <section className={`token-total token-total--${tokenUsageStatus} quota-reveal quota-reveal--1`} aria-label={tokenMetricLabel} title={tokenMetricLabel}>
               <span>{t.tokenTotal}</span>
               <strong>{compactTokenTotal}</strong>
               <small>{t.tokensUnit}</small>
             </section>
           </div>
-          <div className="progress" role="progressbar" aria-label={primaryLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={primary}>
+          <div className="progress quota-reveal quota-reveal--2" role="progressbar" aria-label={primaryLabel} aria-valuemin={0} aria-valuemax={100} aria-valuenow={primary}>
             <span style={{ width: `${primary}%` }} />
           </div>
-          <p className="reset-time">{formatResetTime(primaryQuota?.window.resetsAt ?? null, new Date(), language)}</p>
-          <footer className="card-footer">
+          <p className="reset-time quota-reveal quota-reveal--3">{formatResetTime(primaryQuota?.window.resetsAt ?? null, new Date(), language)}</p>
+          <footer className="card-footer quota-reveal quota-reveal--4">
             <div className="weekly-metric">
               {!weeklyOnly ? <p>{t.weeklyUntil(formatResetDate(snapshot.weeklyWindow?.resetsAt ?? null, language))}</p> : null}
               {!weeklyOnly ? <strong>{weekly ?? "--"}<small>{weekly === null ? "" : "%"}</small></strong> : null}
@@ -170,10 +175,10 @@ export const QuotaCard = memo(function QuotaCard({
       ) : (
         <section className="error-state" aria-live="polite">
           <div className="status-icon" aria-hidden="true"><StatusIcon status={snapshot.status} expired={staleExpired} /></div>
-          <strong>{snapshot.status === "signed_out" ? t.signedInRequired : staleExpired ? t.staleExpired : t.temporarilyUnavailable}</strong>
-          <p>{message ?? t.errorUnavailable}</p>
+          <strong className="quota-reveal quota-reveal--1">{snapshot.status === "signed_out" ? t.signedInRequired : staleExpired ? t.staleExpired : t.temporarilyUnavailable}</strong>
+          <p className="quota-reveal quota-reveal--2">{message ?? t.errorUnavailable}</p>
           {snapshot.status === "stale" ? (
-            <button type="button" className="error-refresh-button" onMouseDown={(event) => event.stopPropagation()} onClick={onRefresh} disabled={!onRefresh} aria-label={t.refreshQuota}>
+            <button type="button" className="error-refresh-button quota-reveal quota-reveal--3" onMouseDown={(event) => event.stopPropagation()} onClick={onRefresh} disabled={!onRefresh} aria-label={t.refreshQuota}>
               <ArrowClockwise />
               <span>{t.refresh}</span>
             </button>

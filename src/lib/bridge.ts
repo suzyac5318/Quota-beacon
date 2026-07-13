@@ -127,13 +127,15 @@ export async function listenPalettePreview(handlers: {
 
 export async function listenPaletteController(handlers: {
   onOpened: (payload: PaletteSessionPayload) => void;
+  onClosing: () => void;
   onColorsChanged: (colors: string[]) => void;
 }): Promise<() => void> {
   if (!isTauri()) return () => undefined;
   const { listen } = await import("@tauri-apps/api/event");
   const unlistenOpened = await listen<PaletteSessionPayload>("palette-preview-opened", (event) => handlers.onOpened(event.payload));
+  const unlistenClosing = await listen("palette-preview-closing", handlers.onClosing);
   const unlistenColors = await listen<string[]>("palette-colors-changed", (event) => handlers.onColorsChanged(event.payload));
-  return () => { unlistenOpened(); unlistenColors(); };
+  return () => { unlistenOpened(); unlistenClosing(); unlistenColors(); };
 }
 
 export async function listenDesktopEvents(handlers: {

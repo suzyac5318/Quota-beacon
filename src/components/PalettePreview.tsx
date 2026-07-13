@@ -2,10 +2,14 @@ import { useEffect, useState } from "react";
 import { closePalettePreview, listenPaletteController, updatePalettePreview } from "../lib/bridge";
 import { clampPercent } from "../lib/format";
 import { DEFAULT_PALETTE_COLORS, normalizePaletteColors, quotaThemeStyle } from "../lib/quotaTheme";
+import { AnimatedNumber } from "./AnimatedNumber";
+
+type MotionPhase = "closed" | "opening" | "open" | "closing";
 
 export function PalettePreview() {
   const [percent, setPercent] = useState(100);
   const [colors, setColors] = useState<string[]>([...DEFAULT_PALETTE_COLORS]);
+  const [motionPhase, setMotionPhase] = useState<MotionPhase>(() => "__TAURI_INTERNALS__" in window ? "closed" : "open");
 
   useEffect(() => {
     let cancelled = false;
@@ -14,7 +18,10 @@ export function PalettePreview() {
       onOpened: (payload) => {
         setPercent(clampPercent(payload.percent));
         setColors(normalizePaletteColors(payload.colors));
+        setMotionPhase("opening");
+        window.requestAnimationFrame(() => window.requestAnimationFrame(() => setMotionPhase("open")));
       },
+      onClosing: () => setMotionPhase("closing"),
       onColorsChanged: (nextColors) => setColors(normalizePaletteColors(nextColors)),
     }).then((unlisten) => {
       if (cancelled) unlisten(); else cleanup = unlisten;
@@ -29,13 +36,13 @@ export function PalettePreview() {
   };
 
   return (
-    <main className="palette-preview" style={quotaThemeStyle(percent, colors)}>
+    <main className={`palette-preview palette-preview--${motionPhase}`} style={quotaThemeStyle(percent, colors)}>
       <div className="palette-preview__header">
         <div>
           <p>色彩预览</p>
           <span>拖动查看 0%–100% 的背景效果</span>
         </div>
-        <output htmlFor="palette-range" aria-live="polite">{percent}%</output>
+        <output htmlFor="palette-range" aria-live="polite" aria-label={`${percent}%`}><AnimatedNumber value={percent} />%</output>
       </div>
       <div className="palette-preview__controls">
         <input

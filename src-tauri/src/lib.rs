@@ -7,7 +7,10 @@ use std::{
     fs,
     io::Write,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     time::{Duration, Instant},
 };
 
@@ -27,6 +30,7 @@ struct AppState {
     fetch_lock: tokio::sync::Mutex<()>,
     snapshot_cache: Mutex<Option<(Instant, Vec<ProviderSnapshot>)>>,
     token_usage_cache: Arc<Mutex<token_usage::TokenUsageCache>>,
+    palette_generation: AtomicU64,
 }
 
 async fn fetch_snapshots_uncached(state: &State<'_, AppState>) -> Vec<ProviderSnapshot> {
@@ -215,6 +219,7 @@ fn open_palette_preview(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    state.palette_generation.fetch_add(1, Ordering::SeqCst);
     let palette = app
         .get_webview_window("palette")
         .ok_or_else(|| "palette window missing".to_string())?;
@@ -249,6 +254,9 @@ fn open_palette_preview(
 }
 
 fn finish_palette_preview(app: &AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.palette_generation.fetch_add(1, Ordering::SeqCst);
+    }
     if let Some(palette) = app.get_webview_window("palette") {
         let _ = palette.hide();
     }
@@ -309,8 +317,20 @@ fn save_palette_colors(
 }
 
 #[tauri::command]
-fn close_palette_preview(app: AppHandle) -> Result<(), String> {
-    finish_palette_preview(&app);
+fn close_palette_preview(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let generation = state.palette_generation.fetch_add(1, Ordering::SeqCst) + 1;
+    let _ = app.emit_to("palette", "palette-preview-closing", ());
+    let _ = app.emit_to("palette-editor", "palette-preview-closing", ());
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(220)).await;
+        let should_finish = app
+            .try_state::<AppState>()
+            .map(|state| state.palette_generation.load(Ordering::SeqCst) == generation)
+            .unwrap_or(false);
+        if should_finish {
+            finish_palette_preview(&app);
+        }
+    });
     Ok(())
 }
 
@@ -499,6 +519,7 @@ pub fn run() {
                 fetch_lock: tokio::sync::Mutex::new(()),
                 snapshot_cache: Mutex::new(None),
                 token_usage_cache: Arc::clone(&token_usage_cache),
+                palette_generation: AtomicU64::new(0),
             });
             codex_overlay::start(app.handle().clone(), token_usage_cache);
             if setup_tray(app).is_err() {
