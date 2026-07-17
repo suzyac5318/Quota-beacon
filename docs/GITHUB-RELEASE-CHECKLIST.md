@@ -39,10 +39,10 @@ git push -u origin main
 
 ```bash
 git add <expected-files>
-git commit -m "v1.5.3: update README product images"
-git tag -a v1.5.3 -m "Quota Beacon v1.5.3"
+git commit -m "v1.5.4: remove replaced README image"
+git tag -a v1.5.4 -m "Quota Beacon v1.5.4"
 git push origin main
-git push origin v1.5.3
+git push origin v1.5.4
 ```
 
 ## 生成可分享版本
@@ -50,8 +50,8 @@ git push origin v1.5.3
 推送 `v*` tag 会触发 release workflow：
 
 ```bash
-git tag -a v1.5.3 -m "Quota Beacon v1.5.3"
-git push origin v1.5.3
+git tag -a v1.5.4 -m "Quota Beacon v1.5.4"
+git push origin v1.5.4
 ```
 
 构建完成后，到 GitHub 仓库的 Releases 页面检查草稿 release。附件应包含：
