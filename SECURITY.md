@@ -6,7 +6,9 @@ Quota Beacon is a local desktop utility that reads Codex quota using the user's 
 
 ## Reporting Issues
 
-Please do not open public issues containing tokens, account IDs, raw backend responses, screenshots with personal data, or local file paths. Redact sensitive information before sharing logs or bug reports.
+Report vulnerabilities privately through [GitHub Security Advisories](https://github.com/suzyac5318/Quota-beacon/security/advisories/new). Please do not open a public issue for a suspected vulnerability.
+
+Do not include tokens, account IDs, raw backend responses, unredacted screenshots, or local file paths. Redact sensitive information before sharing logs or reproduction details. Maintainers will acknowledge a valid report through the private advisory and coordinate remediation before public disclosure.
 
 ## Security Boundaries
 

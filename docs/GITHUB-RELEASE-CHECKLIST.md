@@ -27,21 +27,22 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
 ## 第一次上传到 GitHub
 
-当前 `upstream` 只用于读取衍生项目的上游历史，绝不可推送。先在 GitHub 创建 Quota Beacon 的空仓库，再执行：
+当前 `upstream` 只用于读取衍生项目的上游历史，绝不可推送。`origin` 应指向 `suzyac5318/Quota-beacon`。首次只推送主分支，不使用 `--follow-tags`，避免所有历史版本标签同时触发 Release：
 
 ```bash
-git remote add origin https://github.com/<owner>/<repo>.git
+git remote add origin https://github.com/suzyac5318/Quota-beacon.git
 git branch -M main
-git push -u origin main --follow-tags
+git push -u origin main
 ```
 
 后续版本完成后，更新 `VERSION`、各构建配置和 `CHANGELOG.md`，创建版本化提交和标签，再推送：
 
 ```bash
 git add <expected-files>
-git commit -m "v1.5.0: improve free macOS distribution"
-git tag -a v1.5.0 -m "Quota Beacon v1.5.0"
-git push origin main --follow-tags
+git commit -m "v1.5.1: prepare public GitHub release"
+git tag -a v1.5.1 -m "Quota Beacon v1.5.1"
+git push origin main
+git push origin v1.5.1
 ```
 
 ## 生成可分享版本
@@ -49,18 +50,25 @@ git push origin main --follow-tags
 推送 `v*` tag 会触发 release workflow：
 
 ```bash
-git tag v1.5.0
-git push origin v1.5.0
+git tag -a v1.5.1 -m "Quota Beacon v1.5.1"
+git push origin v1.5.1
 ```
 
-构建完成后，到 GitHub 仓库的 Releases 页面检查已创建的 release。附件应包含：
+构建完成后，到 GitHub 仓库的 Releases 页面检查草稿 release。附件应包含：
 
 - `quota-beacon-windows-unsigned.zip`
 - `quota-beacon-macos-universal-ad-hoc.zip`
 - macOS Universal `.dmg`
 - `quota-beacon-macos-universal-ad-hoc.sha256`
 
-确认附件和自动生成的说明无误后，把 Release 链接发给用户；如发现问题，应撤下对应附件并发布修复版本。
+确认 Windows 与 macOS 附件、SHA-256 和自动生成的说明无误后再发布草稿。不要在任一平台构建失败时提前公开 Release；如发现问题，应保留失败记录并发布修复版本。
+
+首次公开仓库还应确认：
+
+- `main` 分支规则和必需状态检查已启用。
+- Dependabot、依赖漏洞警报、secret scanning 与 push protection 已启用。
+- About 描述、Topics、Issues 和 Social Preview 已配置。
+- Private vulnerability reporting 已启用。
 
 ## 发给 Mac 用户时的说明
 

@@ -2,6 +2,21 @@
 
 本文件记录本仓库可核实的版本与开发里程碑。未创建 Git 提交或标签的工作统一标记为“未发布”，不追溯虚构版本号。
 
+## 1.5.1 — 2026-07-17
+
+### 开源发布
+
+- 更新项目首页、安装步骤、平台验证状态、真实截图、非官方声明和私密安全报告入口。
+- 首次推送流程改为分别推送 `main` 与单个版本标签，避免历史标签批量触发 Release。
+- Release 改为等待 Windows 与 macOS 构建全部成功后，在单一草稿中汇总 Windows ZIP、macOS Universal ZIP、DMG 和 SHA-256。
+- GitHub Actions 权限按最小范围设置，所有外部 Actions 固定到完整提交 SHA，并新增 Dependabot、CODEOWNERS 与安全 Issue 引导。
+- MIT 版权声明同时保留上游贡献者与 `suzyac5318 / Quota Beacon contributors`。
+
+### 验证范围
+
+- Windows 11 为已完成实机验证的平台。
+- macOS Universal 包由 GitHub Actions 构建并自动验证双架构、ad-hoc 签名与 DMG 完整性；真实 Mac 桌面交互仍明确标记为待验收。
+
 ## 1.5.0 — 2026-07-17
 
 ### 新增

@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     strategy:
@@ -26,16 +30,16 @@ jobs:
             artifact-path: src-tauri/target/universal-apple-darwin/release/bundle/*
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
       - name: Install macOS universal targets
         if: runner.os == 'macOS'
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: src-tauri
       - run: npm ci
@@ -49,28 +53,35 @@ jobs:
       - name: Archive bundle
         shell: pwsh
         run: Compress-Archive -Path "${{ matrix.artifact-path }}" -DestinationPath "${{ matrix.archive-name }}" -Force
-      - uses: actions/upload-artifact@v4
+      - name: Collect release assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+          Copy-Item -LiteralPath "${{ matrix.archive-name }}" -Destination release-assets
+          if ($env:RUNNER_OS -eq "macOS") {
+            Get-ChildItem "src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg" | Copy-Item -Destination release-assets
+            Copy-Item -LiteralPath "quota-beacon-macos-universal-ad-hoc.sha256" -Destination release-assets
+          }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: |
-            ${{ matrix.archive-name }}
-            quota-beacon-macos-universal-ad-hoc.sha256
+          path: release-assets/*
           if-no-files-found: error
           retention-days: 90
-      - name: Upload Windows release files
-        if: runner.os == 'Windows'
-        uses: softprops/action-gh-release@v2
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          files: ${{ matrix.archive-name }}
-          draft: false
-          generate_release_notes: true
-      - name: Upload macOS release files
-        if: runner.os == 'macOS'
-        uses: softprops/action-gh-release@v2
+          path: release-assets
+          merge-multiple: true
+      - name: List release assets
+        run: find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+      - name: Create draft release with both platforms
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          files: |
-            ${{ matrix.archive-name }}
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-            quota-beacon-macos-universal-ad-hoc.sha256
-          draft: false
+          files: release-assets/*
+          draft: true
           generate_release_notes: true

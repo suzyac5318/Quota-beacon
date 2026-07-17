@@ -1,4 +1,4 @@
-# Quota Beacon 1.5.0
+# Quota Beacon 1.5.1
 
 Quota Beacon is a local-first floating desktop widget for checking Codex usage limits from the local Codex Desktop login state.
 
@@ -12,7 +12,11 @@ Quota Beacon is a local-first floating desktop widget for checking Codex usage l
 
 1. Sign in to Codex Desktop on the same machine.
 2. Download the package for your platform.
-3. Unzip the package and run the app.
+3. Follow the platform-specific instructions below.
+
+### Windows 11 note
+
+The Windows build is unsigned and may show an Unknown Publisher or SmartScreen warning. Confirm that the package came from this repository's GitHub Release before continuing.
 
 ### macOS ad-hoc app note
 
@@ -33,6 +37,7 @@ Quota Beacon does not store Codex tokens, account IDs, prompts, chats, raw quota
 - Codex quota is read from non-public quota service responses and may stop working if the response shape changes.
 - The app shows stale/unavailable states instead of estimating quota.
 - Windows and macOS builds share the same React/CSS UI and behavior layer.
+- Windows 11 is the currently verified desktop platform. The macOS bundle is CI-built and automatically checked but still awaits real-Mac interaction testing.
 
 ## Checks
 
