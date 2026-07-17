@@ -1,4 +1,4 @@
-# Quota Beacon 1.5.2
+# Quota Beacon 1.5.3
 
 Quota Beacon is a local-first floating desktop widget for checking Codex usage limits from the local Codex Desktop login state.
 
