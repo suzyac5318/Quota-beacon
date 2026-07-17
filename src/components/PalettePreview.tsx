@@ -40,7 +40,7 @@ export function PalettePreview() {
       <div className="palette-preview__header">
         <div>
           <p>色彩预览</p>
-          <span>拖动查看 0%–100% 的背景效果</span>
+          <span className="palette-preview__description">拖动查看 0%–100% 的背景效果</span>
         </div>
         <output htmlFor="palette-range" aria-live="polite" aria-label={`${percent}%`}><AnimatedNumber value={percent} />%</output>
       </div>
