@@ -28,7 +28,7 @@ jobs:
             build-command: npm run tauri -- build
             artifact-path: src-tauri/target/release/bundle/**
           - os: macos-latest
-            artifact-name: quota-beacon-macos-universal-unsigned
+            artifact-name: quota-beacon-macos-universal-ad-hoc
             build-command: npm run tauri -- build --target universal-apple-darwin
             artifact-path: src-tauri/target/universal-apple-darwin/release/bundle/**
     runs-on: ${{ matrix.os }}
@@ -48,9 +48,15 @@ jobs:
       - run: npm ci
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: ${{ matrix.build-command }}
+      - name: Verify macOS bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: .github/scripts/verify-macos-bundle.sh src-tauri/target/universal-apple-darwin/release/bundle
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact-name }}
-          path: ${{ matrix.artifact-path }}
+          path: |
+            ${{ matrix.artifact-path }}
+            quota-beacon-macos-universal-ad-hoc.sha256
           if-no-files-found: error
           retention-days: 14

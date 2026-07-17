@@ -4,16 +4,18 @@
 
 Quota Beacon 使用同一套 React/CSS/Tauri 代码构建 Windows 和 macOS 版本。视觉效果、悬浮球、展开卡片、透明度、圆角和动画参数都应保持在共享前端代码中，避免维护 Windows/macOS 两套 UI。
 
-当前发布默认输出 unsigned 包：
+当前发布默认输出：
 
 - `quota-beacon-windows-unsigned.zip`
-- `quota-beacon-macos-universal-unsigned.zip`
+- `quota-beacon-macos-universal-ad-hoc.zip`
+- macOS Universal `.dmg`
+- `quota-beacon-macos-universal-ad-hoc.sha256`
 
-macOS 包使用 Universal 构建，同时支持 Apple Silicon 和 Intel Mac。
+macOS 包使用 Universal 构建，同时支持 Apple Silicon 和 Intel Mac，并使用无需付费账号的 ad-hoc 签名。ad-hoc 签名可保证应用包内代码签名结构完整，但不能替代 Apple Developer ID 签名和公证。
 
 ## 发布一个 GitHub 下载版本
 
-推送 `v*` tag 会触发 `.github/workflows/release.yml`，构建 Windows unsigned 包和 macOS Universal unsigned 包，并上传到草稿 GitHub Release。
+推送 `v*` tag 会触发 `.github/workflows/release.yml`，构建 Windows unsigned 包和 macOS Universal ad-hoc 签名包，并上传到 GitHub Release。
 
 ```bash
 git tag v1.0.0
@@ -41,26 +43,33 @@ macOS CI/release 会显式安装：
 npm run tauri -- build --target universal-apple-darwin
 ```
 
-## macOS unsigned 包使用说明
+macOS 构建完成后，`.github/scripts/verify-macos-bundle.sh` 会自动检查：
 
-因为当前 macOS 包未签名、未公证，首次打开时 Gatekeeper 可能会阻止启动。小范围测试用户可以使用以下方式打开：
+- `.app` 的严格递归代码签名完整性和 ad-hoc 签名身份。
+- 主可执行文件同时包含 `arm64` 与 `x86_64`。
+- DMG 文件结构可以通过 `hdiutil verify`。
+- 为发布 DMG 生成 SHA-256 校验文件。
 
-1. 解压下载的 macOS zip。
-2. 将应用移动到 Applications 或任意测试目录。
-3. 右键点击应用，选择 Open。
-4. 在系统提示中再次选择 Open。
+## macOS ad-hoc 包使用说明
 
-如果系统仍然阻止，可以在 System Settings -> Privacy & Security 中允许打开该应用。
+因为当前 macOS 包没有付费 Developer ID 签名和 Apple 公证，首次打开时 Gatekeeper 仍可能阻止启动：
+
+1. 下载 `.dmg`，并可用同一 Release 中的 `.sha256` 文件核对下载完整性。
+2. 打开 DMG，将 Quota Beacon 拖入 Applications。
+3. 在 Applications 中右键点击 Quota Beacon，选择 Open。
+4. 在系统提示中再次选择 Open；以后即可正常双击启动。
+
+如果系统仍然阻止，到 System Settings -> Privacy & Security，在安全提示旁选择 Open Anyway。不要关闭系统全局 Gatekeeper。
 
 ## 签名与公证
 
-Unsigned 包可以用于内部测试或小范围分发，但公开分发建议补齐签名与公证：
+当前 ad-hoc 包适合免费开源分发，但无法消除首次运行确认。若未来需要无此提示的公开分发，应补齐：
 
 - Windows：代码签名证书，避免 SmartScreen 或未知发布者提示。
 - macOS：Apple Developer ID Application 证书、Team ID、app-specific password，并完成 notarization。
 - CI：将证书、密码和 Team ID 放入 GitHub Secrets，再在 release workflow 中加入签名和公证步骤。
 
-证书和账号凭据不能由代码仓库生成，需要由项目所有者购买、申请或配置。
+证书和账号凭据不能由代码仓库生成，需要由项目所有者购买、申请或配置。免费 Apple ID 的开发证书不适合长期公开分发，也不能用于公证。
 
 ## 跨平台维护原则
 

@@ -16,7 +16,8 @@
 | 生命周期 | 单实例、关闭隐藏、休眠恢复 | 无重复后台进程，窗口可恢复 | 待实机验证 |
 | 性能 | 空闲 CPU/内存 | 无持续高 CPU，记录平台基线 | 待安装包验证 |
 | 构建 | Windows unsigned 包 | 生成 `quota-beacon-windows-unsigned.zip` | CI/Release 验证 |
-| 构建 | macOS Universal unsigned 包 | 生成 `quota-beacon-macos-universal-unsigned.zip`，支持 Apple Silicon 和 Intel | CI/Release 验证 |
+| 构建 | macOS Universal ad-hoc 包 | 生成 ad-hoc 签名的 ZIP 与 DMG，主程序同时包含 Apple Silicon 和 Intel 架构 | CI 自动检查，待 Release 验证 |
+| 完整性 | macOS DMG | `codesign --verify --deep --strict`、`lipo`、`hdiutil verify` 通过，并发布 SHA-256 | CI 自动检查，待 Release 验证 |
 | 隐私 | 日志与配置扫描 | 无 token、账号 ID、原始响应 | 静态审查通过，待安装包扫描 |
 
 ## 发布门槛
@@ -26,5 +27,5 @@
 - 前端测试、前端构建、Rust 测试通过。
 - Windows 和 macOS CI bundle artifact 成功生成。
 - Windows 实机完成安装、启动、托盘、拖动、锁定、语言切换、退出验证。
-- macOS 实机完成首次打开、菜单栏托盘、透明悬浮窗、展开/收起、拖动、置顶、读取 `~/.codex/auth.json` 验证。
+- macOS 实机完成 DMG 挂载、拖入 Applications、Gatekeeper 手动放行、再次正常启动、菜单栏托盘、透明悬浮窗、展开/收起、拖动、置顶、读取 `~/.codex/auth.json` 验证。
 - 严重和高风险问题清零。

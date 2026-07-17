@@ -2,7 +2,7 @@
 
 Quota Beacon 是一款独立维护、local-first 的 Tauri 桌面悬浮工具。它在本机读取已有 Codex Desktop 登录状态，以清晰的悬浮卡片展示真实额度、重置时间、本机 Token 汇总和可定制的额度主题。
 
-> 当前版本：`1.0.0`（开发中）
+> 当前版本：`1.5.0`
 
 ## 主要功能
 
@@ -36,7 +36,7 @@ npm run tauri dev
 npm run tauri build
 ```
 
-GitHub Actions 会在 push/PR 时执行测试和构建；推送 `v*` 标签时会生成 Windows 与 macOS 的 unsigned 发布包。仓库地址创建后，再在 [docs/GITHUB-RELEASE-CHECKLIST.md](docs/GITHUB-RELEASE-CHECKLIST.md) 中完成连接与首次发布。
+GitHub Actions 会在 push/PR 时执行测试和构建；推送 `v*` 标签时会生成 Windows unsigned 包和 macOS Universal ad-hoc 签名包。macOS 包无需付费开发者账号，但首次启动仍需用户在 Gatekeeper 中确认。仓库地址创建后，再在 [docs/GITHUB-RELEASE-CHECKLIST.md](docs/GITHUB-RELEASE-CHECKLIST.md) 中完成连接与首次发布。
 
 不要提交本机凭据、`.codex`、`.env*`、个人截图、`node_modules`、构建输出或安装包。
 

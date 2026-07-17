@@ -2,6 +2,24 @@
 
 本文件记录本仓库可核实的版本与开发里程碑。未创建 Git 提交或标签的工作统一标记为“未发布”，不追溯虚构版本号。
 
+## 1.5.0 — 2026-07-17
+
+### 新增
+
+- macOS Universal 构建改用无需付费开发者账号的 ad-hoc 签名，同时保留 Apple Silicon 与 Intel 双架构。
+- Release 直接提供 DMG、完整 bundle ZIP 和 SHA-256 校验文件。
+- 新增 macOS 自动验收脚本，检查递归签名、ad-hoc 身份、双架构主程序和 DMG 完整性。
+
+### 变更
+
+- CI 与 Release 工件统一改名为 `quota-beacon-macos-universal-ad-hoc`，明确其未公证的分发边界。
+- 安装说明补充 Gatekeeper 的安全放行流程、校验值用法和 Mac 实机验收要求。
+
+### 验证
+
+- 前端测试、TypeScript/Vite 构建、Rust 检查和 Windows Tauri 构建通过。
+- macOS Universal 架构、ad-hoc 签名与 DMG 校验由 macOS CI 执行；真实 Mac 首次安装与桌面交互待发布工件生成后验收。
+
 ## 1.4.3 — 2026-07-17
 
 ### 修复

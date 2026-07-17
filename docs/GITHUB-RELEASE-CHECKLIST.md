@@ -39,8 +39,8 @@ git push -u origin main --follow-tags
 
 ```bash
 git add <expected-files>
-git commit -m "v1.0.1: describe the completed work"
-git tag -a v1.0.1 -m "Quota Beacon v1.0.1"
+git commit -m "v1.5.0: improve free macOS distribution"
+git tag -a v1.5.0 -m "Quota Beacon v1.5.0"
 git push origin main --follow-tags
 ```
 
@@ -49,26 +49,27 @@ git push origin main --follow-tags
 推送 `v*` tag 会触发 release workflow：
 
 ```bash
-git tag v1.0.0
-git push origin v1.0.0
+git tag v1.5.0
+git push origin v1.5.0
 ```
 
-构建完成后，到 GitHub 仓库的 Releases 页面检查 draft release。附件应包含：
+构建完成后，到 GitHub 仓库的 Releases 页面检查已创建的 release。附件应包含：
 
 - `quota-beacon-windows-unsigned.zip`
-- `quota-beacon-macos-universal-unsigned.zip`
+- `quota-beacon-macos-universal-ad-hoc.zip`
+- macOS Universal `.dmg`
+- `quota-beacon-macos-universal-ad-hoc.sha256`
 
-确认无误后点击 Publish release，然后把 Release 链接发给用户。
+确认附件和自动生成的说明无误后，把 Release 链接发给用户；如发现问题，应撤下对应附件并发布修复版本。
 
 ## 发给 Mac 用户时的说明
 
-当前 macOS 包是 unsigned 包。用户首次打开可能会被 Gatekeeper 拦截，可以这样打开：
+当前 macOS 包是 ad-hoc 签名、未公证的包。用户首次打开可能会被 Gatekeeper 拦截，可以这样打开：
 
-1. 下载 `quota-beacon-macos-universal-unsigned.zip`。
-2. 解压后把应用拖到 Applications 或任意测试目录。
-3. 右键点击应用，选择 Open。
-4. 在系统提示里再次选择 Open。
-5. 如果仍被拦截，到 System Settings -> Privacy & Security 里允许打开。
+1. 下载 `.dmg`，需要时用同一 Release 的 `.sha256` 核对完整性。
+2. 打开 DMG，把应用拖到 Applications。
+3. 在 Applications 中右键点击应用，选择 Open，并在系统提示里再次选择 Open。
+4. 如果仍被拦截，到 System Settings -> Privacy & Security 选择 Open Anyway。
 
 ## 以后公开分发还需要什么
 
